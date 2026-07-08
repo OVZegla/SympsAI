@@ -18,6 +18,10 @@ import {
   type AvailableTest,
 } from "@/components/incidents/TestRunsPanel";
 import { ClosurePanel } from "@/components/incidents/ClosurePanel";
+import {
+  AttachmentsPanel,
+  type AttachmentItem,
+} from "@/components/incidents/AttachmentsPanel";
 import { diagnosticResponseSchema } from "@/lib/ai/schemas";
 
 interface IncidentDetail extends Incident {
@@ -78,6 +82,13 @@ export default async function IncidentDetailPage({
       .returns<AvailableTest[]>();
     availableTests = data ?? [];
   }
+
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("id, filename, attachment_type, description")
+    .eq("incident_id", params.id)
+    .order("created_at", { ascending: true })
+    .returns<AttachmentItem[]>();
 
   return (
     <div className="flex h-screen flex-col">
@@ -174,6 +185,11 @@ export default async function IncidentDetailPage({
             incidentId={incident.id}
             runs={testRuns ?? []}
             availableTests={availableTests}
+          />
+
+          <AttachmentsPanel
+            incidentId={incident.id}
+            attachments={attachments ?? []}
           />
 
           {incident.status !== "closed" && (
