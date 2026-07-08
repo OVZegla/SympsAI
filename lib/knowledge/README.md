@@ -1,17 +1,21 @@
-# lib/knowledge — document ingestion (Phase 2)
+# lib/knowledge — document & incident ingestion (Phase 2 & 6, implemented)
 
-Turns uploaded documents into searchable, cited chunks (spec §28-§30, §53).
+Turns documents and validated incidents into searchable, cited chunks
+(spec §28-§33).
 
-Planned modules:
+Modules:
 
-- `ingestion.ts` — upload → store original → extract → detect structure →
-  chunk → add metadata → embed → index (§28 pipeline).
-- `chunking.ts` — structure-aware chunks of ~500-800 tokens with light overlap;
-  respect headings/sections, never split blindly every N characters (§29).
-- `embeddings.ts` — call Voyage with `EMBEDDING_MODEL` / `EMBEDDING_DIMENSION`
-  (§55); write into `document_chunks.embedding` (vector(1024)).
+- `extract.ts` — text extraction (text/markdown; binary formats pluggable, the
+  original is always kept in Storage per §30).
+- `chunking.ts` — structure-aware Markdown chunking, ~650 tokens with light
+  overlap; never blind fixed-size splits (§29). Unit-tested.
+- `embeddings.ts` — batched Voyage embeddings using `EMBEDDING_MODEL` /
+  `EMBEDDING_DIMENSION` (§55).
+- `ingestion.ts` — chunk → embed → index into `document_chunks` (RLS-scoped);
+  `toVectorLiteral` formats vectors for pgvector.
+- `incident-indexing.ts` — indexes a HUMAN-VALIDATED incident into
+  `incident_knowledge_chunks` (§33); only reached via the closure/validation
+  flow, never for unvalidated incidents (§2.3).
 
-Keep the original file in Supabase Storage, and preserve page numbers and
-important images so answers can cite exact locations and pass diagrams to Claude
-(§30). Every document version is retained so old incidents keep showing the
-version used at diagnosis time (§11).
+Keyword search keeps working even when embeddings are absent (the `content_tsv`
+columns are generated in SQL).

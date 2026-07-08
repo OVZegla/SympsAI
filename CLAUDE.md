@@ -116,6 +116,10 @@ Never redesign unrelated parts without a reason.
 - **Phase 8** — statistics: frequent problems/causes, affected models, recurrence.
 - **Phase 9** — Odoo (later, via MCP).
 
-**Current status: Phase 0 + Phase 1 implemented. The full database schema and
-RLS exist for all phases; RAG/AI code is scaffolding only (typed, not wired).**
-Do not implement RAG or the assistant until retrieval can be tested on its own.
+**Current status: Phases 0–8 implemented. Phase 9 (Odoo) is a documented seam
+only (out of V1 scope, spec §4/§9/§58).** The full database schema and RLS exist
+for all phases; retrieval (Phase 3) works standalone and is exercised by the
+manual search screen; the assistant (Phase 4) grounds its answers on retrieval,
+never on model memory. External integrations (Anthropic, Voyage, Storage) are
+implemented against their real APIs; pure logic (chunking, RRF fusion,
+source-authority ordering, incident numbering) is unit-tested.

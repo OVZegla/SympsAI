@@ -14,23 +14,34 @@ solved incident into reusable knowledge.
 
 ## Status
 
-**Phase 0 + Phase 1 implemented** (spec §58):
+**Phases 0–8 implemented** (spec §58); Phase 9 (Odoo) is a documented seam only.
 
-- Next.js (App Router) + TypeScript strict foundation.
-- Supabase Auth with a login screen (no public sign-up) and route-level auth
-  guard via middleware.
-- Full PostgreSQL schema for **all** phases with Row Level Security on every
-  table (`supabase/migrations/`).
-- Roles (admin / technician / viewer) and per-organization isolation.
-- Machine models, the component hierarchy, clients, physical machines.
-- Incidents: creation from a free-text description, list, and a detail view with
-  the two-pane chat/context layout.
-- A basic dashboard.
+- **Phase 0** — Next.js (App Router) + TypeScript strict; Supabase Auth (login,
+  no public sign-up) + route-level auth guard; full PostgreSQL schema for all
+  phases with RLS on every table; roles (admin/technician/viewer) and
+  per-organization isolation.
+- **Phase 1** — machine models, component hierarchy, clients, physical machines;
+  incidents (create from free text, list, two-pane detail); dashboard.
+- **Phase 2** — document upload, versioning, Storage, structure-aware chunking,
+  Voyage embeddings, indexing.
+- **Phase 3** — retrieval (keyword FTS + pgvector semantic + filters + RRF
+  fusion + source-authority ordering), a standalone manual search screen, and
+  `/api/search*`. Runs **without** the AI.
+- **Phase 4** — assistant: AI query analysis, retrieval-grounded, schema-
+  validated cited answers (`/api/chat`), observability (`ai_runs`,
+  `retrieval_runs`).
+- **Phase 5** — interactive diagnosis: test catalogue, structured result
+  recording, machine history.
+- **Phase 6** — memory: human-validated closure that confirms a cause and
+  indexes the incident into searchable knowledge.
+- **Phase 7** — photos: attachment upload + Claude-vision image analysis.
+- **Phase 8** — statistics: incidents by model/component, frequent causes,
+  recurrence.
+- **Phase 9** — Odoo: documented seam (`lib/odoo/`), out of V1 scope.
 
-**Scaffolding, not yet wired** (later phases): the AI layer (`lib/ai/`), RAG
-(`lib/rag/`, `lib/knowledge/`), versioned prompts (`prompts/`), and the eval
-harness (`evals/`) exist as typed placeholders. Per the spec, retrieval (Phase
-3) must be built and tested *before* the assistant (Phase 4).
+External integrations (Anthropic, Voyage, Storage) call their real APIs and need
+live credentials to run end-to-end; the pure logic (chunking, RRF fusion,
+source-authority ordering, incident numbering) is covered by unit tests.
 
 ## Stack
 

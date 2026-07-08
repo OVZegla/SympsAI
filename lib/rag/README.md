@@ -1,19 +1,19 @@
-# lib/rag — retrieval pipeline (Phase 3)
+# lib/rag — retrieval pipeline (Phase 3, implemented)
 
-Built and tested **before** the assistant (Phase 4). Retrieval alone must be
-able to surface `PROC-M1-COM-003` and `INC-0042` for the reference scenario
-(spec §58 Phase 3, §66).
+Retrieval works standalone, without the AI (spec §58 Phase 3, §17-§19). The
+manual search screen and `/api/search*` exercise it directly.
 
-Planned modules (spec §53, §17):
+Modules:
 
-- `query-parser.ts` — turn free text into the parsed-query structure (§16).
-- `keyword-search.ts` — Postgres full-text search over `content_tsv` (§17 step 4).
-- `semantic-search.ts` — pgvector cosine search over embeddings (§17 step 3).
-- `hybrid-search.ts` — fuse keyword + semantic + technical filters (§17 steps 5-6).
-- `rerank.ts` — Voyage reranking of the top candidates (§17 step 7).
-- `context-builder.ts` — assemble the "dossier de preuves" with source levels (§18-§19).
+- `types.ts` — hit types and `SourceLevel` (source authority, spec §19).
+- `fusion.ts` — Reciprocal Rank Fusion + source-authority ordering (unit-tested).
+- `search.ts` — keyword (FTS) + semantic (pgvector) search over documents and
+  incident knowledge, fused with RRF; degrades to keyword-only if embeddings are
+  unavailable.
+- `context-builder.ts` — the "dossier de preuves": separate buckets per source
+  type so an unresolved conversation can't outrank an approved procedure (§18).
+- `rerank.ts` — best-effort Voyage reranking (§17 step 7).
 
-Design rules: run **separate** searches for procedures, documents, resolved
-incidents and open incidents (§18) so an unresolved conversation can never
-overwrite an approved procedure. Record every run in `retrieval_runs` (§48).
-Do **not** put retrieval logic inside React components (CLAUDE.md).
+The SQL search functions live in `supabase/migrations/0009_search_functions.sql`
+and run under the caller's RLS. Retrieval runs are recorded in `retrieval_runs`
+by the assistant (§48). Retrieval logic stays out of React components (CLAUDE.md).
