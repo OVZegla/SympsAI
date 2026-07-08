@@ -10,7 +10,9 @@ import type {
   IncidentMessage,
   MessageAuthor,
 } from "@/lib/types/database";
-import { addMessage } from "./actions";
+import { DiagnosticView } from "@/components/chat/DiagnosticView";
+import { AskAssistant } from "@/components/chat/AskAssistant";
+import { diagnosticResponseSchema } from "@/lib/ai/schemas";
 
 interface IncidentDetail extends Incident {
   machine_models: { name: string } | null;
@@ -50,8 +52,6 @@ export default async function IncidentDetailPage({
     .order("created_at", { ascending: true })
     .returns<IncidentMessage[]>();
 
-  const addMessageForIncident = addMessage.bind(null, incident.id);
-
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
@@ -77,49 +77,45 @@ export default async function IncidentDetailPage({
         {/* Chat column */}
         <section className="flex flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-auto p-6">
-            {(messages ?? []).map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.author_type === "assistant"
-                    ? "rounded-lg border border-slate-200 bg-white p-4"
-                    : "rounded-lg bg-slate-100 p-4"
+            {(messages ?? []).map((m) => {
+              // Assistant messages carry a structured diagnostic payload the UI
+              // renders (spec §36); fall back to plain text if absent/invalid.
+              if (m.author_type === "assistant" && m.structured_content_json) {
+                const parsed = diagnosticResponseSchema.safeParse(
+                  m.structured_content_json,
+                );
+                if (parsed.success) {
+                  return (
+                    <div
+                      key={m.id}
+                      className="rounded-lg border border-slate-200 bg-white p-4"
+                    >
+                      <DiagnosticView data={parsed.data} />
+                    </div>
+                  );
                 }
-              >
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {AUTHOR_LABELS[m.author_type]}
-                </p>
-                <p className="whitespace-pre-wrap text-sm text-slate-800">
-                  {m.content}
-                </p>
-              </div>
-            ))}
+              }
+              return (
+                <div
+                  key={m.id}
+                  className={
+                    m.author_type === "assistant"
+                      ? "rounded-lg border border-slate-200 bg-white p-4"
+                      : "rounded-lg bg-slate-100 p-4"
+                  }
+                >
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    {AUTHOR_LABELS[m.author_type]}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm text-slate-800">
+                    {m.content}
+                  </p>
+                </div>
+              );
+            })}
           </div>
 
-          {/* The AI assistant answer arrives in Phase 4. For now the transcript
-              records the technician's observations and test results. */}
-          <form
-            action={addMessageForIncident}
-            className="border-t border-slate-200 bg-white p-4"
-          >
-            <div className="flex gap-2">
-              <input
-                name="content"
-                placeholder="Décris le résultat / ajoute une observation…"
-                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
-              />
-              <button
-                type="submit"
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-              >
-                Envoyer
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              L&apos;assistant IA (recherche de cas similaires, procédures et
-              diagnostic) sera activé en phase 4.
-            </p>
-          </form>
+          <AskAssistant incidentId={incident.id} />
         </section>
 
         {/* Context column (spec §42) */}
