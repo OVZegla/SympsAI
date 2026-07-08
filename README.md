@@ -37,7 +37,6 @@ solved incident into reusable knowledge.
 - **Phase 7** — photos: attachment upload + Claude-vision image analysis.
 - **Phase 8** — statistics: incidents by model/component, frequent causes,
   recurrence.
-- **Phase 9** — Odoo: documented seam (`lib/odoo/`), out of V1 scope.
 
 External integrations (Anthropic, Voyage, Storage) call their real APIs and need
 live credentials to run end-to-end; the pure logic (chunking, RRF fusion,
