@@ -17,6 +17,7 @@ import {
   type TestRunItem,
   type AvailableTest,
 } from "@/components/incidents/TestRunsPanel";
+import { ClosurePanel } from "@/components/incidents/ClosurePanel";
 import { diagnosticResponseSchema } from "@/lib/ai/schemas";
 
 interface IncidentDetail extends Incident {
@@ -174,6 +175,10 @@ export default async function IncidentDetailPage({
             runs={testRuns ?? []}
             availableTests={availableTests}
           />
+
+          {incident.status !== "closed" && (
+            <ClosurePanel incidentId={incident.id} />
+          )}
         </aside>
       </div>
     </div>
