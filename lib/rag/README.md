@@ -9,11 +9,13 @@ Modules:
 - `fusion.ts` — Reciprocal Rank Fusion + source-authority ordering (unit-tested).
 - `search.ts` — keyword (FTS) + semantic (pgvector) search over documents and
   incident knowledge, fused with RRF; degrades to keyword-only if embeddings are
-  unavailable.
+  unavailable. Queries are embedded with the SAME provider/model as the
+  documents (via `lib/embeddings/`), and semantic search is filtered to that
+  model so vectors from a different model never leak in.
 - `context-builder.ts` — the "dossier de preuves": separate buckets per source
   type so an unresolved conversation can't outrank an approved procedure (§18).
-- `rerank.ts` — best-effort Voyage reranking (§17 step 7).
 
 The SQL search functions live in `supabase/migrations/0009_search_functions.sql`
-and run under the caller's RLS. Retrieval runs are recorded in `retrieval_runs`
-by the assistant (§48). Retrieval logic stays out of React components (CLAUDE.md).
+(dimensions/RPCs updated to 768 in `0011_embeddings_ollama.sql`) and run under
+the caller's RLS. Retrieval runs are recorded in `retrieval_runs` by the
+assistant (§48). Retrieval logic stays out of React components (CLAUDE.md).

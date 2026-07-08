@@ -23,7 +23,7 @@ solved incident into reusable knowledge.
 - **Phase 1** — machine models, component hierarchy, clients, physical machines;
   incidents (create from free text, list, two-pane detail); dashboard.
 - **Phase 2** — document upload, versioning, Storage, structure-aware chunking,
-  Voyage embeddings, indexing.
+  local Ollama (`embeddinggemma`) embeddings, indexing.
 - **Phase 3** — retrieval (keyword FTS + pgvector semantic + filters + RRF
   fusion + source-authority ordering), a standalone manual search screen, and
   `/api/search*`. Runs **without** the AI.
@@ -38,15 +38,35 @@ solved incident into reusable knowledge.
 - **Phase 8** — statistics: incidents by model/component, frequent causes,
   recurrence.
 
-External integrations (Anthropic, Voyage, Storage) call their real APIs and need
-live credentials to run end-to-end; the pure logic (chunking, RRF fusion,
-source-authority ordering, incident numbering) is covered by unit tests.
+Anthropic and Supabase Storage call their real APIs and need live credentials to
+run end-to-end; embeddings run locally via Ollama. The pure logic (chunking, RRF
+fusion, source-authority ordering, incident numbering, embedding
+provider/validation) is covered by unit tests.
 
 ## Stack
 
 Next.js · TypeScript · Supabase (PostgreSQL / Auth / Storage) · pgvector ·
-Anthropic native SDK · Voyage embeddings. Model ids are configured via
-environment variables and never hard-coded (spec §55).
+Anthropic native SDK · **local Ollama embeddings (`embeddinggemma`, 768-dim)**.
+Model ids are configured via environment variables and never hard-coded
+(spec §55). Embeddings run fully locally — no external embedding API key.
+
+## Embeddings (local, via Ollama)
+
+Embeddings are generated locally by [Ollama](https://ollama.com) running the
+`embeddinggemma` model. There is **no Voyage account and no embedding API key**.
+
+```bash
+# 1. Install Ollama (see https://ollama.com/download), then start it.
+#    The desktop app runs a server on http://127.0.0.1:11434 automatically;
+#    on a headless machine run:  ollama serve
+
+# 2. Download the embedding model:
+ollama pull embeddinggemma
+```
+
+Ollama must be running and reachable at `OLLAMA_BASE_URL` for semantic search
+and document indexing. Keyword / full-text search works even when it is not.
+Check the provider status any time on the **Admin** page.
 
 ## Getting started
 
@@ -55,15 +75,21 @@ environment variables and never hard-coded (spec §55).
 npm install
 
 # 2. Configure environment
-cp .env.example .env.local        # then fill in real values
+cp .env.example .env.local        # fill Supabase + Anthropic; embedding vars have defaults
 
 # 3. Apply the database schema
 #    With the Supabase CLI against a local or linked project:
 supabase db reset                 # runs migrations in supabase/migrations/
 psql "$DATABASE_URL" -f supabase/seed/seed.sql   # optional: seed M1 + Opaline
 
-# 4. Run
+# 4. Make sure Ollama is running + the model is pulled (see "Embeddings" above)
+ollama pull embeddinggemma
+
+# 5. Run
 npm run dev                       # http://localhost:3000
+
+# 6. (When you already have documents/incidents) generate their vectors:
+npm run embeddings:reindex
 ```
 
 Create your first user from the Supabase dashboard (Auth → Users). The
@@ -71,21 +97,34 @@ Create your first user from the Supabase dashboard (Auth → Users). The
 single organization. Set `role` to `admin` in the `profiles` table for the first
 account.
 
+### Embedding environment variables
+
+```env
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=embeddinggemma
+EMBEDDING_DIMENSION=768
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+EMBEDDING_BATCH_SIZE=32          # optional
+```
+
 ## Scripts
 
-| Command             | Purpose                              |
-| ------------------- | ------------------------------------ |
-| `npm run dev`       | Start the dev server                 |
-| `npm run build`     | Production build                     |
-| `npm run typecheck` | `tsc --noEmit` (strict)              |
-| `npm run lint`      | ESLint (next/core-web-vitals)        |
-| `npm test`          | Unit tests (Vitest)                  |
-| `npm run evals`     | Load AI eval cases (spec §50)        |
+| Command                      | Purpose                                        |
+| ---------------------------- | ---------------------------------------------- |
+| `npm run dev`                | Start the dev server                           |
+| `npm run build`              | Production build                               |
+| `npm run typecheck`          | `tsc --noEmit` (strict)                        |
+| `npm run lint`               | ESLint (next/core-web-vitals)                  |
+| `npm test`                   | Unit tests (Vitest)                            |
+| `npm run evals`              | Load AI eval cases (spec §50)                  |
+| `npm run embeddings:reindex` | (Re)generate chunk embeddings via Ollama; add `-- --all` to re-embed everything |
 
 ## Security
 
-- Three secrets stay server-side only and never reach the browser (spec §47):
-  `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`.
+- Secrets stay server-side only and never reach the browser (spec §47):
+  `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`. Ollama is called only from
+  the server (`OLLAMA_BASE_URL` is not a `NEXT_PUBLIC_` variable) — the browser
+  talks to the app, the app talks to Ollama.
 - RLS baseline: a user's `organization_id` must equal the row's
   `organization_id`. Writes to technical data require the technician/admin role;
   deletions are admin-only (`supabase/migrations/0006_rls.sql`).
@@ -98,13 +137,15 @@ account.
 app/            Next.js routes (auth, dashboard, api)
 components/      React components
 lib/
-  ai/           Anthropic client, models, tools, schemas (scaffold)
-  rag/          retrieval pipeline (later phase)
-  knowledge/    ingestion / chunking / embeddings (later phase)
+  ai/           Anthropic client, models, tools, schemas, orchestration
+  embeddings/   provider abstraction + local Ollama provider + service
+  rag/          retrieval pipeline (keyword + semantic + fusion)
+  knowledge/    document/incident ingestion, chunking, embedding
   supabase/     client / server / admin DB access
   types/        reusable domain types
 prompts/        versioned system prompts
 evals/          AI evaluation cases + runner
+scripts/        maintenance scripts (embeddings:reindex)
 supabase/       migrations + seed
 tests/          unit tests
 ```

@@ -9,8 +9,10 @@ Modules:
   original is always kept in Storage per §30).
 - `chunking.ts` — structure-aware Markdown chunking, ~650 tokens with light
   overlap; never blind fixed-size splits (§29). Unit-tested.
-- `embeddings.ts` — batched Voyage embeddings using `EMBEDDING_MODEL` /
-  `EMBEDDING_DIMENSION` (§55).
+- `embeddings.ts` — adapter over the generic embedding service
+  (`lib/embeddings/`), which uses the local Ollama provider (`embeddinggemma`).
+  Writes embedding provenance (provider/model/dimension/embedded_at) alongside
+  each vector.
 - `ingestion.ts` — chunk → embed → index into `document_chunks` (RLS-scoped);
   `toVectorLiteral` formats vectors for pgvector.
 - `incident-indexing.ts` — indexes a HUMAN-VALIDATED incident into

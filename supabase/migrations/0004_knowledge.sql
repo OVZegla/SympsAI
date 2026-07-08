@@ -2,9 +2,13 @@
 -- 0004_knowledge.sql — documents, versions, RAG chunks, incident knowledge
 -- =============================================================================
 -- The knowledge base: procedures, manuals, notes, plus the searchable chunks
--- used by RAG (spec §11, §28-§33). Embedding dimension matches EMBEDDING_DIMENSION
--- (voyage-4 → 1024, spec §55). If you change the embedding model's dimension,
--- add a migration that alters these vector(1024) columns.
+-- used by RAG (spec §11, §28-§33).
+--
+-- HISTORICAL NOTE: these columns were originally created as vector(1024) for the
+-- Voyage embedding model. The project now uses local Ollama/embeddinggemma
+-- (768-dim); migration 0011_embeddings_ollama.sql clears the old vectors and
+-- switches these columns to vector(768) + adds embedding provenance columns.
+-- This file is left as-is to preserve the true migration history.
 
 -- --- Enums -------------------------------------------------------------------
 create type document_type as enum (

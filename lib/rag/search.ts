@@ -12,12 +12,15 @@ import {
   type IncidentHit,
   type SearchFilters,
 } from "@/lib/rag/types";
-import { embedQuery } from "@/lib/voyage/client";
+import { getEmbeddingService } from "@/lib/embeddings/service";
 
 /**
  * Keyword + semantic search over documents and incident knowledge, fused with
  * RRF (spec §17). Keyword search (§17 step 4) works even without embeddings, so
- * retrieval degrades gracefully when Voyage is unavailable.
+ * retrieval degrades gracefully when the embedding service is unavailable.
+ * The query is embedded with the SAME provider/model as the documents (spec
+ * §17), and semantic search is filtered to that model so vectors from a
+ * different model can never leak into results.
  */
 
 interface DocRpcRow {
@@ -82,14 +85,19 @@ function toIncidentHit(row: IncidentRpcRow, score: number): IncidentHit {
   };
 }
 
-/** Best-effort query embedding: returns null if Voyage is unavailable. */
+/** Best-effort query embedding: returns null if the service is unavailable. */
 async function tryEmbedQuery(query: string): Promise<number[] | null> {
   try {
-    return await embedQuery(query);
+    return await getEmbeddingService().embedQuery(query);
   } catch (err) {
     console.error("[rag] query embedding failed, keyword-only:", (err as Error).message);
     return null;
   }
+}
+
+/** Model whose vectors we search — must match the query embedding's model. */
+function currentEmbeddingModel(): string {
+  return getEmbeddingService().getMetadata().model;
 }
 
 export async function searchDocuments(
@@ -112,6 +120,7 @@ export async function searchDocuments(
         query_embedding: `[${embedding.join(",")}]`,
         match_count: limit,
         filter_machine_model_id: machineModelId,
+        filter_embedding_model: currentEmbeddingModel(),
       })
     : Promise.resolve({ data: [] as DocRpcRow[], error: null });
 
@@ -150,6 +159,7 @@ export async function searchIncidents(
         match_count: limit,
         filter_machine_model_id: machineModelId,
         exclude_incident_id: excludeIncidentId,
+        filter_embedding_model: currentEmbeddingModel(),
       })
     : Promise.resolve({ data: [] as IncidentRpcRow[], error: null });
 

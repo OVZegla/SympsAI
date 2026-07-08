@@ -23,13 +23,8 @@ export const aiConfig = {
   get fastModel(): string {
     return process.env.CLAUDE_FAST_MODEL || requireEnv("CLAUDE_PRIMARY_MODEL");
   },
-  get embeddingModel(): string {
-    return process.env.EMBEDDING_MODEL || "voyage-4";
-  },
-  get embeddingDimension(): number {
-    return Number(process.env.EMBEDDING_DIMENSION || "1024");
-  },
-  get rerankModel(): string {
-    return process.env.RERANK_MODEL || "rerank-2.5-lite";
-  },
 } as const;
+
+// Embedding configuration lives in lib/embeddings/validation.ts
+// (getEmbeddingConfig) — the app reaches embeddings only through the
+// EmbeddingService abstraction, not through this Claude-model config.

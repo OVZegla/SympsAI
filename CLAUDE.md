@@ -38,10 +38,13 @@ memory — Symp's owns the truth.
 - Supabase PostgreSQL / Auth / Storage
 - pgvector for embeddings
 - Anthropic **native** SDK (no compatibility shims, no LangChain unless proven necessary)
-- Voyage embeddings + reranking
+- **Local Ollama embeddings** (`embeddinggemma`, 768-dim) — no external embedding
+  API key. The app depends on the `EmbeddingProvider` abstraction
+  (`lib/embeddings/`), not on Ollama directly.
 
 Model ids live in environment variables and are **never** hard-coded
-(spec §55, avoid error #9). Read them from `lib/ai/models.ts`.
+(spec §55, avoid error #9). Read Claude model ids from `lib/ai/models.ts` and the
+embedding configuration from `lib/embeddings/validation.ts`.
 
 ## Architecture rules
 
@@ -50,8 +53,9 @@ components.
 
 - `app/` — UI (routes, server components, client components)
 - `lib/supabase/` — database access (client / server / admin)
+- `lib/embeddings/` — embedding provider abstraction + local Ollama provider + service
 - `lib/knowledge/` — document ingestion, chunking, embeddings
-- `lib/rag/` — retrieval (query parsing, keyword, semantic, hybrid, rerank, context)
+- `lib/rag/` — retrieval (query parsing, keyword, semantic, hybrid, context)
 - `lib/ai/` — AI orchestration (Anthropic client, tools, schemas, models)
 - `prompts/` — versioned system prompts (markdown)
 
@@ -70,8 +74,10 @@ components.
 
 ## Security
 
-- Three secrets stay server-side only: `SUPABASE_SERVICE_ROLE_KEY`,
-  `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`. The browser never receives them.
+- Server secrets stay server-side only: `SUPABASE_SERVICE_ROLE_KEY`,
+  `ANTHROPIC_API_KEY`. The browser never receives them. Embeddings run on a
+  local Ollama server reached only from server code (`OLLAMA_BASE_URL` is not
+  public); no embedding API key exists.
 - Every application table has RLS. Baseline rule: a user's `organization_id`
   must equal the row's `organization_id`.
 - Dangerous physical operations (mains voltage, UV, sensor bypass, mechanical
@@ -82,7 +88,7 @@ components.
 
 - TypeScript strict mode. No `any` unless documented with a reason.
 - Reusable domain types in `lib/types/`.
-- Error handling on every external call (DB, Anthropic, Voyage).
+- Error handling on every external call (DB, Anthropic, Ollama).
 - Audit sensitive actions (`audit_logs`).
 - Tests for critical workflows.
 - Comments explain **why**, not obvious syntax.
@@ -119,6 +125,7 @@ Never redesign unrelated parts without a reason.
 intentionally not built — out of scope.) The full database schema and RLS exist
 for all phases; retrieval (Phase 3) works standalone and is exercised by the
 manual search screen; the assistant (Phase 4) grounds its answers on retrieval,
-never on model memory. External integrations (Anthropic, Voyage, Storage) are
-implemented against their real APIs; pure logic (chunking, RRF fusion,
-source-authority ordering, incident numbering) is unit-tested.
+never on model memory. Anthropic and Storage are implemented against their real
+APIs; embeddings run locally via Ollama (`embeddinggemma`, 768-dim); pure logic
+(chunking, RRF fusion, source-authority ordering, incident numbering, embedding
+provider/validation) is unit-tested.
