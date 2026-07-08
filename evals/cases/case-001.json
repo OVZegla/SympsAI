@@ -1,0 +1,10 @@
+{
+  "id": "CASE-001",
+  "description": "M1 — BetterPrinter controls greyed out, main board green light off (spec §50, §66).",
+  "machine_model": "M1",
+  "problem": "Les commandes BetterPrinter sont grisées.",
+  "extra_information": "Le voyant vert de la carte principale est éteint.",
+  "expected_procedure": "PROC-M1-COM-003",
+  "expected_incident": "INC-0042",
+  "expected_first_action": "Contrôle de l'alimentation de la carte principale."
+}
