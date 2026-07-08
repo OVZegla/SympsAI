@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import type { MachineStatus } from "@/lib/types/database";
@@ -44,7 +45,9 @@ export default async function MachinesPage() {
             {(machines ?? []).map((m) => (
               <tr key={m.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-900">
-                  {m.serial_number ?? m.internal_reference ?? "—"}
+                  <Link href={`/machines/${m.id}`} className="hover:underline">
+                    {m.serial_number ?? m.internal_reference ?? "—"}
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-slate-700">
                   {m.machine_models?.name ?? "—"}

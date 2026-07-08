@@ -12,6 +12,11 @@ import type {
 } from "@/lib/types/database";
 import { DiagnosticView } from "@/components/chat/DiagnosticView";
 import { AskAssistant } from "@/components/chat/AskAssistant";
+import {
+  TestRunsPanel,
+  type TestRunItem,
+  type AvailableTest,
+} from "@/components/incidents/TestRunsPanel";
 import { diagnosticResponseSchema } from "@/lib/ai/schemas";
 
 interface IncidentDetail extends Incident {
@@ -51,6 +56,27 @@ export default async function IncidentDetailPage({
     .eq("incident_id", params.id)
     .order("created_at", { ascending: true })
     .returns<IncidentMessage[]>();
+
+  // Test runs on this incident + the catalogue of tests available for its
+  // machine model (spec §21-§23 get_available_tests).
+  const { data: testRuns } = await supabase
+    .from("incident_test_runs")
+    .select("id, status, result_notes, diagnostic_tests(title, code)")
+    .eq("incident_id", params.id)
+    .order("created_at", { ascending: true })
+    .returns<TestRunItem[]>();
+
+  let availableTests: AvailableTest[] = [];
+  if (incident.machine_model_id) {
+    const { data } = await supabase
+      .from("diagnostic_tests")
+      .select("id, code, title")
+      .eq("machine_model_id", incident.machine_model_id)
+      .eq("active", true)
+      .order("code")
+      .returns<AvailableTest[]>();
+    availableTests = data ?? [];
+  }
 
   return (
     <div className="flex h-screen flex-col">
@@ -143,17 +169,11 @@ export default async function IncidentDetailPage({
             </p>
           </ContextBlock>
 
-          <ContextBlock title="Incidents similaires">
-            <p className="text-xs text-slate-400">
-              Recherche de cas similaires — phase 3/4.
-            </p>
-          </ContextBlock>
-
-          <ContextBlock title="Documents">
-            <p className="text-xs text-slate-400">
-              Procédures citées — phase 3/4.
-            </p>
-          </ContextBlock>
+          <TestRunsPanel
+            incidentId={incident.id}
+            runs={testRuns ?? []}
+            availableTests={availableTests}
+          />
         </aside>
       </div>
     </div>

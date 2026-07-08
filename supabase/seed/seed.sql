@@ -63,3 +63,32 @@ begin
     (org, m1, main_board, 'Alimentation', 'alimentation')
   on conflict (machine_model_id, parent_component_id, slug) do nothing;
 end $$;
+
+-- --- M1 diagnostic test catalogue (spec §60) --------------------------------
+-- A minimal catalogue so the interactive diagnosis (Phase 5) has tests to
+-- propose. Codes follow TEST-M1-<system>-NNN.
+do $$
+declare
+  org uuid := '00000000-0000-0000-0000-000000000001';
+  m1  uuid;
+  communication uuid;
+  main_board uuid;
+begin
+  select id into m1 from public.machine_models
+   where organization_id = org and slug = 'm1';
+  select id into communication from public.components
+   where machine_model_id = m1 and slug = 'communication' and parent_component_id is null;
+  select id into main_board from public.components
+   where machine_model_id = m1 and slug = 'carte-principale';
+
+  insert into public.diagnostic_tests
+    (organization_id, machine_model_id, component_id, code, title, description, risk_level, active)
+  values
+    (org, m1, communication, 'TEST-M1-COM-001', 'Contrôle des branchements',
+     'Vérifier visuellement tous les connecteurs du bloc de communication.', 'low', true),
+    (org, m1, communication, 'TEST-M1-COM-002', 'Connexion signal directe',
+     'Tester la machine avec une connexion signal directe.', 'normal', true),
+    (org, m1, main_board, 'TEST-M1-COM-003', 'Alimentation de la carte principale',
+     'Mesurer la tension d''alimentation en entrée de la carte principale.', 'normal', true)
+  on conflict do nothing;
+end $$;
