@@ -11,6 +11,8 @@
  * tout est sauvegardé. `npm run stop` arrête aussi la base (données conservées).
  */
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import {
   SUPABASE,
   run,
@@ -28,6 +30,15 @@ import {
 const APP_URL = "http://localhost:3000";
 
 async function main() {
+  // 0. First run? Run the full setup automatically (DB + schema + admin +
+  //    AI models) so a single `npm start` — or a double-click on the
+  //    launcher — is enough from a fresh clone.
+  if (!existsSync(path.join(ROOT, ".env.local"))) {
+    log("Première utilisation détectée — installation automatique…");
+    const setup = run("node", [path.join(ROOT, "scripts", "setup.mjs")]);
+    if (setup.status !== 0) fail("L'installation automatique a échoué (voir messages ci-dessus).");
+  }
+
   // 1. Database (persistent across restarts)
   let creds = supabaseStatusEnv();
   if (!creds) {

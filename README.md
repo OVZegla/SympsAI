@@ -52,16 +52,25 @@ higher-quality backend. Model ids are configured via environment variables and
 never hard-coded (spec §55). **By default the app runs 100% free and offline —
 no API key of any kind.**
 
-## Démarrage rapide (une commande)
+## Démarrage rapide
 
-Prérequis : [Node 20+](https://nodejs.org), [Docker Desktop](https://docs.docker.com/get-docker/)
-et [Ollama](https://ollama.com/download) (pour l'IA locale gratuite — optionnel).
+Prérequis (à installer une seule fois) : [Node 20+](https://nodejs.org),
+[Docker Desktop](https://docs.docker.com/get-docker/) et
+[Ollama](https://ollama.com/download) (IA locale gratuite — optionnel).
+
+**macOS — double-clic :** ouvre `Demarrer SympsAI.command` (clic droit → Ouvrir
+la première fois). Il démarre Docker et Ollama tout seul, fait l'installation
+complète au premier lancement, puis ouvre le navigateur. Glisse-le dans le Dock
+pour lancer Symp's AI en un clic.
+
+**Ou en ligne de commande :**
 
 ```bash
 npm install
-npm run setup      # une fois : base locale + schéma + compte admin + modèles IA
-npm start          # tout démarre tout seul + ouvre le navigateur
+npm start          # tout démarre tout seul (installation auto au 1er lancement)
 ```
+
+(`npm run setup` reste disponible pour relancer l'installation à la main.)
 
 - Connexion par défaut : `admin@symps.local` / `symps-admin` (à changer).
 - **Tout se sauvegarde automatiquement** : les données vivent dans PostgreSQL
