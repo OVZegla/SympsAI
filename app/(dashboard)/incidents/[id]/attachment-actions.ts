@@ -115,7 +115,7 @@ export async function uploadAttachment(incidentId: string, formData: FormData) {
       await supabase.from("ai_runs").insert({
         incident_id: incidentId,
         message_id: message?.id ?? null,
-        model: process.env.CLAUDE_PRIMARY_MODEL ?? null,
+        model: `${analysis.provider}:${analysis.model}`,
         prompt_version: analysis.promptVersion,
         input_tokens: analysis.inputTokens,
         output_tokens: analysis.outputTokens,

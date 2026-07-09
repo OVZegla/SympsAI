@@ -1,9 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type Anthropic from "@anthropic-ai/sdk";
-import { aiConfig } from "@/lib/ai/models";
-import { generateStructured } from "@/lib/ai/structured";
+import { getLLMService } from "@/lib/ai/llm/service";
 import { loadPrompt, PROMPT_VERSIONS } from "@/lib/ai/prompts";
 import { parseQuery, searchQueryFromParsed } from "@/lib/ai/query-parser";
 import { diagnosticResponseSchema, type DiagnosticResponse } from "@/lib/ai/schemas";
@@ -14,8 +12,9 @@ import { formatEvidence, evidenceCount } from "@/lib/ai/context-format";
  * The Phase 4 assistant (spec §58, §20, §36). Pipeline:
  *   1. parse the query into a structured analysis (spec §16);
  *   2. run retrieval → evidence dossier (Phase 3, kept separate by source);
- *   3. ask Claude for a schema-validated diagnostic response grounded on the
- *      dossier, citing sources (spec §20, §43);
+ *   3. ask the configured LLM (local Ollama by default; Claude if selected)
+ *      for a schema-validated diagnostic response grounded on the dossier,
+ *      citing sources (spec §20, §43);
  *   4. persist the assistant message, retrieval_runs and ai_runs (spec §48).
  *
  * Retrieval is done in code and passed as attributed context, so the model
@@ -24,7 +23,7 @@ import { formatEvidence, evidenceCount } from "@/lib/ai/context-format";
  */
 
 // JSON schema mirroring diagnosticResponseSchema (lib/ai/schemas.ts).
-const DIAGNOSIS_INPUT_SCHEMA: Anthropic.Tool.InputSchema = {
+const DIAGNOSIS_INPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     state: {
@@ -152,7 +151,8 @@ export async function runDiagnosis(
     retrieved_incidents_json: [...dossier.resolvedIncidents, ...dossier.openIncidents],
   });
 
-  // 3. Ask Claude for the structured diagnosis grounded on the dossier.
+  // 3. Ask the configured model (local Ollama by default, Claude if selected)
+  //    for the structured diagnosis grounded on the dossier.
   const system = await loadPrompt(PROMPT_VERSIONS.diagnostic);
   const userContent =
     `# Problème décrit par le technicien\n${query}\n\n` +
@@ -163,14 +163,13 @@ export async function runDiagnosis(
       : "Produis un diagnostic progressif : un seul prochain test, sépare faits/hypothèses, " +
         "cite les sources par leur référence.");
 
-  const result = await generateStructured({
-    model: aiConfig.primaryModel,
+  const result = await getLLMService().run("primary", {
     system,
-    messages: [{ role: "user", content: userContent }],
+    userText: userContent,
     toolName: "provide_diagnosis",
     toolDescription:
       "Provide the structured diagnostic response. Cite only sources present in the dossier.",
-    inputSchema: DIAGNOSIS_INPUT_SCHEMA,
+    jsonSchema: DIAGNOSIS_INPUT_SCHEMA,
     schema: diagnosticResponseSchema,
     maxTokens: 2048,
   });
@@ -189,7 +188,7 @@ export async function runDiagnosis(
   await supabase.from("ai_runs").insert({
     incident_id: incidentId,
     message_id: message?.id ?? null,
-    model: aiConfig.primaryModel,
+    model: `${result.provider}:${result.model}`,
     prompt_version: PROMPT_VERSIONS.diagnostic,
     input_tokens: result.inputTokens + parseTokensIn,
     output_tokens: result.outputTokens + parseTokensOut,

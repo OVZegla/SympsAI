@@ -1,15 +1,14 @@
 import "server-only";
 
-import { aiConfig } from "@/lib/ai/models";
-import { generateStructured } from "@/lib/ai/structured";
+import { getLLMService } from "@/lib/ai/llm/service";
 import { loadPrompt, PROMPT_VERSIONS } from "@/lib/ai/prompts";
 import { parsedQuerySchema, type ParsedQuery } from "@/lib/ai/schemas";
 
 /**
  * Turn a free-text problem description into the structured analysis (spec §16),
- * before retrieval. Uses the fast model. On failure the caller falls back to
- * using the raw text as the search query, so a parser hiccup never blocks the
- * assistant.
+ * before retrieval. Runs on the "fast" task lane (local Ollama by default;
+ * Claude if configured). On failure the caller falls back to using the raw text
+ * as the search query, so a parser hiccup never blocks the assistant.
  */
 const PARSED_QUERY_INPUT_SCHEMA = {
   type: "object" as const,
@@ -50,16 +49,17 @@ export async function parseQuery(text: string): Promise<{
   value: ParsedQuery;
   inputTokens: number;
   outputTokens: number;
+  model: string;
+  provider: string;
   promptVersion: string;
 }> {
   const system = await loadPrompt(PROMPT_VERSIONS.queryParser);
-  const result = await generateStructured({
-    model: aiConfig.fastModel,
+  const result = await getLLMService().run("fast", {
     system,
-    messages: [{ role: "user", content: text }],
+    userText: text,
     toolName: "record_analysis",
     toolDescription: "Record the structured analysis of the technician's description.",
-    inputSchema: PARSED_QUERY_INPUT_SCHEMA,
+    jsonSchema: PARSED_QUERY_INPUT_SCHEMA,
     schema: parsedQuerySchema,
     maxTokens: 1024,
   });

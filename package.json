@@ -4,9 +4,12 @@
   "private": true,
   "description": "Internal AI-assisted technical knowledge and diagnostic system for Symp's printing machines.",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "start": "node scripts/start.mjs",
+    "stop": "node scripts/stop.mjs",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start:next": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

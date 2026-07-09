@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { EmbeddingStatus } from "@/components/admin/EmbeddingStatus";
+import { LLMStatus } from "@/components/admin/LLMStatus";
 
 export default async function AdminPage() {
   const profile = await requireProfile();
@@ -18,7 +19,10 @@ export default async function AdminPage() {
     <div className="space-y-6 p-8">
       <h1 className="text-2xl font-semibold text-slate-900">Administration</h1>
 
-      <EmbeddingStatus />
+      <div className="flex flex-wrap gap-6">
+        <LLMStatus />
+        <EmbeddingStatus />
+      </div>
 
       <div className="max-w-md rounded-lg border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
         <p>

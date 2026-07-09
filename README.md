@@ -46,72 +46,78 @@ provider/validation) is covered by unit tests.
 ## Stack
 
 Next.js · TypeScript · Supabase (PostgreSQL / Auth / Storage) · pgvector ·
-Anthropic native SDK · **local Ollama embeddings (`embeddinggemma`, 768-dim)**.
-Model ids are configured via environment variables and never hard-coded
-(spec §55). Embeddings run fully locally — no external embedding API key.
+**local Ollama AI by default** (LLM `qwen2.5`, vision `llama3.2-vision`,
+embeddings `embeddinggemma` 768-dim) · Anthropic native SDK as an optional
+higher-quality backend. Model ids are configured via environment variables and
+never hard-coded (spec §55). **By default the app runs 100% free and offline —
+no API key of any kind.**
 
-## Embeddings (local, via Ollama)
+## Démarrage rapide (une commande)
 
-Embeddings are generated locally by [Ollama](https://ollama.com) running the
-`embeddinggemma` model. There is **no Voyage account and no embedding API key**.
-
-```bash
-# 1. Install Ollama (see https://ollama.com/download), then start it.
-#    The desktop app runs a server on http://127.0.0.1:11434 automatically;
-#    on a headless machine run:  ollama serve
-
-# 2. Download the embedding model:
-ollama pull embeddinggemma
-```
-
-Ollama must be running and reachable at `OLLAMA_BASE_URL` for semantic search
-and document indexing. Keyword / full-text search works even when it is not.
-Check the provider status any time on the **Admin** page.
-
-## Getting started
+Prérequis : [Node 20+](https://nodejs.org), [Docker Desktop](https://docs.docker.com/get-docker/)
+et [Ollama](https://ollama.com/download) (pour l'IA locale gratuite — optionnel).
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Configure environment
-cp .env.example .env.local        # fill Supabase + Anthropic; embedding vars have defaults
-
-# 3. Apply the database schema
-#    With the Supabase CLI against a local or linked project:
-supabase db reset                 # runs migrations in supabase/migrations/
-psql "$DATABASE_URL" -f supabase/seed/seed.sql   # optional: seed M1 + Opaline
-
-# 4. Make sure Ollama is running + the model is pulled (see "Embeddings" above)
-ollama pull embeddinggemma
-
-# 5. Run
-npm run dev                       # http://localhost:3000
-
-# 6. (When you already have documents/incidents) generate their vectors:
-npm run embeddings:reindex
+npm run setup      # une fois : base locale + schéma + compte admin + modèles IA
+npm start          # tout démarre tout seul + ouvre le navigateur
 ```
 
-Create your first user from the Supabase dashboard (Auth → Users). The
-`handle_new_user` trigger provisions the matching profile and attaches it to the
-single organization. Set `role` to `admin` in the `profiles` table for the first
-account.
+- Connexion par défaut : `admin@symps.local` / `symps-admin` (à changer).
+- **Tout se sauvegarde automatiquement** : les données vivent dans PostgreSQL
+  (volumes Docker persistants). Quitter avec Ctrl+C ne perd rien ;
+  `npm run stop` arrête la base en conservant les données.
+- `npm run setup -- --vision` télécharge aussi le modèle d'analyse d'images
+  (~8 Go, optionnel).
+- Sans Ollama : incidents, machines, clients, recherche par mots-clés et
+  statistiques fonctionnent quand même.
 
-### Embedding environment variables
+## AI backends (local by default, Claude optional)
+
+| Task | Default (free, local) | Optional (paid) |
+|---|---|---|
+| Query analysis | Ollama `qwen2.5` | Claude (`CLAUDE_FAST_MODEL`) |
+| Diagnosis | Ollama `qwen2.5` | Claude (`CLAUDE_PRIMARY_MODEL`) |
+| Image analysis | Ollama `llama3.2-vision` | Claude |
+| Embeddings | Ollama `embeddinggemma` | — (always local) |
+
+Switch by env var — no code change:
 
 ```env
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL=embeddinggemma
-EMBEDDING_DIMENSION=768
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-EMBEDDING_BATCH_SIZE=32          # optional
+# everything on Claude:
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+
+# or hybrid: keep local parsing/vision, route only the diagnosis to Claude:
+LLM_DIAGNOSIS_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+Provider health is shown on the **Admin** page and the dashboard.
+
+### Manual setup (without the one-command scripts)
+
+```bash
+cp .env.example .env.local            # defaults are fine for local use
+npx supabase start                     # local Postgres/Auth/Storage (Docker)
+npx supabase db reset                  # migrations + seed
+ollama pull embeddinggemma && ollama pull qwen2.5
+npm run dev                            # http://localhost:3000
+npm run embeddings:reindex             # (re)generate vectors for existing data
+```
+
+Create users from Supabase Studio (http://localhost:54323 → Auth → Users); the
+`handle_new_user` trigger provisions the profile. Set `role` to `admin` in
+`profiles` for the first account.
 
 ## Scripts
 
 | Command                      | Purpose                                        |
 | ---------------------------- | ---------------------------------------------- |
-| `npm run dev`                | Start the dev server                           |
+| `npm run setup`              | One-time install: local DB + schema + admin + AI models |
+| `npm start`                  | Start everything (DB, Ollama, app) + open the browser |
+| `npm run stop`               | Stop the local DB (data is kept)               |
+| `npm run dev`                | Start only the Next.js dev server              |
 | `npm run build`              | Production build                               |
 | `npm run typecheck`          | `tsc --noEmit` (strict)                        |
 | `npm run lint`               | ESLint (next/core-web-vitals)                  |
@@ -137,7 +143,7 @@ EMBEDDING_BATCH_SIZE=32          # optional
 app/            Next.js routes (auth, dashboard, api)
 components/      React components
 lib/
-  ai/           Anthropic client, models, tools, schemas, orchestration
+  ai/           LLM orchestration (llm/ provider abstraction: Ollama | Claude)
   embeddings/   provider abstraction + local Ollama provider + service
   rag/          retrieval pipeline (keyword + semantic + fusion)
   knowledge/    document/incident ingestion, chunking, embedding
@@ -145,7 +151,7 @@ lib/
   types/        reusable domain types
 prompts/        versioned system prompts
 evals/          AI evaluation cases + runner
-scripts/        maintenance scripts (embeddings:reindex)
+scripts/        setup/start/stop + embeddings:reindex
 supabase/       migrations + seed
 tests/          unit tests
 ```

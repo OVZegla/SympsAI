@@ -1,0 +1,32 @@
+# Supabase local development configuration (used by `npx supabase start`).
+# The local stack runs in Docker with persistent volumes: data survives
+# stopping/restarting the app ("tout se sauvegarde").
+project_id = "symps-ai"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+
+# Seed applied on `supabase db reset` (first setup): organization, M1 + Opaline,
+# component hierarchy, diagnostic test catalogue.
+[db.seed]
+enabled = true
+sql_paths = ["./seed/seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+# No public sign-up (spec §13): accounts are created by the setup script /
+# an administrator, not from the login screen.
+enable_signup = true
+
+[storage]
+enabled = true

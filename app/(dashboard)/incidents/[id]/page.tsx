@@ -124,28 +124,44 @@ export default async function IncidentDetailPage({
                 );
                 if (parsed.success) {
                   return (
-                    <div
-                      key={m.id}
-                      className="rounded-lg border border-slate-200 bg-white p-4"
-                    >
+                    <div key={m.id} className="mr-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <DiagnosticView data={parsed.data} />
                     </div>
                   );
                 }
               }
+              if (m.author_type === "system") {
+                return (
+                  <p key={m.id} className="text-center text-xs text-slate-400">
+                    — {m.content} —
+                  </p>
+                );
+              }
+              const isAssistant = m.author_type === "assistant";
               return (
                 <div
                   key={m.id}
                   className={
-                    m.author_type === "assistant"
-                      ? "rounded-lg border border-slate-200 bg-white p-4"
-                      : "rounded-lg bg-slate-100 p-4"
+                    isAssistant
+                      ? "mr-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                      : "ml-8 rounded-xl bg-slate-900 p-4 text-white"
                   }
                 >
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  <p
+                    className={
+                      "mb-1 text-xs font-medium uppercase tracking-wide " +
+                      (isAssistant ? "text-slate-400" : "text-slate-400")
+                    }
+                  >
+                    {isAssistant ? "🤖 " : "👤 "}
                     {AUTHOR_LABELS[m.author_type]}
                   </p>
-                  <p className="whitespace-pre-wrap text-sm text-slate-800">
+                  <p
+                    className={
+                      "whitespace-pre-wrap text-sm " +
+                      (isAssistant ? "text-slate-800" : "text-white")
+                    }
+                  >
                     {m.content}
                   </p>
                 </div>

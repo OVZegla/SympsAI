@@ -37,10 +37,13 @@ memory — Symp's owns the truth.
 - Next.js (App Router) + TypeScript (strict)
 - Supabase PostgreSQL / Auth / Storage
 - pgvector for embeddings
-- Anthropic **native** SDK (no compatibility shims, no LangChain unless proven necessary)
-- **Local Ollama embeddings** (`embeddinggemma`, 768-dim) — no external embedding
-  API key. The app depends on the `EmbeddingProvider` abstraction
-  (`lib/embeddings/`), not on Ollama directly.
+- **Local Ollama AI by default** — LLM (`qwen2.5`), vision (`llama3.2-vision`)
+  and embeddings (`embeddinggemma`, 768-dim) all run locally: the app works
+  100% free/offline with no API key. Anthropic's native SDK is the optional
+  higher-quality backend (`LLM_PROVIDER=anthropic`, or hybrid via
+  `LLM_DIAGNOSIS_PROVIDER=anthropic`). The app depends on the `LLMProvider`
+  (`lib/ai/llm/`) and `EmbeddingProvider` (`lib/embeddings/`) abstractions,
+  never on a concrete backend directly.
 
 Model ids live in environment variables and are **never** hard-coded
 (spec §55, avoid error #9). Read Claude model ids from `lib/ai/models.ts` and the
@@ -53,6 +56,7 @@ components.
 
 - `app/` — UI (routes, server components, client components)
 - `lib/supabase/` — database access (client / server / admin)
+- `lib/ai/llm/` — LLM provider abstraction (Ollama default | Anthropic) + routing service
 - `lib/embeddings/` — embedding provider abstraction + local Ollama provider + service
 - `lib/knowledge/` — document ingestion, chunking, embeddings
 - `lib/rag/` — retrieval (query parsing, keyword, semantic, hybrid, context)
@@ -89,6 +93,8 @@ components.
 - TypeScript strict mode. No `any` unless documented with a reason.
 - Reusable domain types in `lib/types/`.
 - Error handling on every external call (DB, Anthropic, Ollama).
+- One-command local run: `npm run setup` once, then `npm start`
+  (scripts/setup.mjs, start.mjs, stop.mjs — local Supabase + Ollama).
 - Audit sensitive actions (`audit_logs`).
 - Tests for critical workflows.
 - Comments explain **why**, not obvious syntax.
