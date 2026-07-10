@@ -24,8 +24,10 @@ export async function requireProfile(): Promise<Profile> {
     .single<Profile>();
 
   if (!profile) {
-    // Authenticated but no profile row yet (trigger pending / misconfigured).
-    redirect("/login");
+    // Authenticated but no profile row (the handle_new_user trigger didn't run,
+    // e.g. the account was created before the org existed). Surface it instead
+    // of bouncing silently to a blank login form.
+    redirect("/login?error=noprofile");
   }
 
   return profile;

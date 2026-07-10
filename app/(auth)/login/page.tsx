@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Surface the "authenticated but no profile" case (see lib/auth.ts).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("error") === "noprofile") {
+      setError(
+        "Ton compte existe mais n'a pas de profil rattaché. " +
+          "Relance l'installation (npm run setup) ou crée le profil dans Supabase Studio.",
+      );
+    }
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -17,21 +25,31 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    setLoading(false);
-
     if (signInError) {
-      setError("Identifiants invalides.");
+      setLoading(false);
+      // Surface the real reason so we don't debug blind.
+      setError(
+        /invalid login credentials/i.test(signInError.message)
+          ? "Email ou mot de passe incorrect."
+          : `Connexion impossible : ${signInError.message}`,
+      );
       return;
     }
 
-    // Full navigation so the middleware picks up the refreshed session cookies.
-    router.push("/dashboard");
-    router.refresh();
+    if (!data.session) {
+      setLoading(false);
+      setError("Aucune session créée. Réessaie ou relance l'installation.");
+      return;
+    }
+
+    // Full page navigation (not router.push) so the freshly-set session cookie
+    // is guaranteed to reach the server middleware on the next request.
+    window.location.assign("/dashboard");
   }
 
   return (
