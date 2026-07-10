@@ -70,10 +70,13 @@ create policy profiles_admin_all on public.profiles
 do $$
 declare
   t text;
+  -- Tables that carry an organization_id column directly. retrieval_runs and
+  -- ai_runs do NOT (they are observability logs tied to an incident) — they get
+  -- their own incident-scoped policies below.
   org_tables text[] := array[
     'clients', 'machine_models', 'components', 'machines',
     'incidents', 'diagnostic_tests', 'causes', 'solutions',
-    'documents', 'attachments', 'tags', 'retrieval_runs', 'ai_runs'
+    'documents', 'attachments', 'tags'
   ];
 begin
   foreach t in array org_tables loop
@@ -124,6 +127,44 @@ create policy audit_logs_select on public.audit_logs
 create policy audit_logs_insert on public.audit_logs
   for insert to authenticated
   with check (organization_id = public.current_organization_id());
+
+-- =============================================================================
+-- retrieval_runs & ai_runs: internal observability (spec §48). No
+-- organization_id column — authorize through the linked incident's org. A row
+-- with no incident (e.g. a standalone AI run) is allowed within the org. Reads
+-- are admin-only, like audit_logs.
+-- =============================================================================
+do $$
+declare
+  t text;
+  log_tables text[] := array['retrieval_runs', 'ai_runs'];
+begin
+  foreach t in array log_tables loop
+    execute format($f$
+      create policy %1$s_select on public.%1$s
+        for select to authenticated
+        using (public.is_admin() and (
+          incident_id is null or exists (
+            select 1 from public.incidents i
+            where i.id = %1$s.incident_id
+              and i.organization_id = public.current_organization_id()
+          )
+        ));
+    $f$, t);
+
+    execute format($f$
+      create policy %1$s_insert on public.%1$s
+        for insert to authenticated
+        with check (
+          incident_id is null or exists (
+            select 1 from public.incidents i
+            where i.id = %1$s.incident_id
+              and i.organization_id = public.current_organization_id()
+          )
+        );
+    $f$, t);
+  end loop;
+end $$;
 
 -- =============================================================================
 -- Incident child tables: authorize through the parent incident's org.

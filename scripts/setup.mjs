@@ -11,8 +11,11 @@
  * Sûr à relancer : ne réinitialise la base QUE lors de la première
  * installation (jamais quand des données existent déjà).
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
 import {
   SUPABASE,
+  ROOT,
   run,
   runCapture,
   log,
@@ -77,8 +80,11 @@ async function main() {
   }
 
   // 2. Supabase local stack (idempotent: `start` on an already-running stack is a no-op).
+  // "First install" is keyed on .env.local (written at the END of setup), NOT on
+  // whether the stack is up — so a retry after a failed install still does a
+  // clean `db reset` rather than a partial `migration up`.
+  const firstInstall = !existsSync(path.join(ROOT, ".env.local"));
   const alreadyRunning = supabaseStatusEnv() !== null;
-  const firstInstall = !alreadyRunning;
   log(alreadyRunning ? "Base locale déjà démarrée." : "Démarrage de la base locale (premier lancement : quelques minutes)…");
   if (!alreadyRunning) {
     const started = run(SUPABASE[0], [...SUPABASE.slice(1), "start"]);
