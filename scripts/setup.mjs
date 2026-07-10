@@ -38,6 +38,8 @@ async function createAdminUser({ url, service }) {
     Authorization: `Bearer ${service}`,
     "Content-Type": "application/json",
   };
+
+  // 1. Create the auth user (idempotent).
   const res = await fetch(`${url}/auth/v1/admin/users`, {
     method: "POST",
     headers,
@@ -48,7 +50,11 @@ async function createAdminUser({ url, service }) {
       user_metadata: { full_name: "Admin", role: "admin" },
     }),
   });
-  if (!res.ok) {
+  let userId = null;
+  if (res.ok) {
+    userId = (await res.json().catch(() => ({}))).id ?? null;
+    log(`Compte admin créé : ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
+  } else {
     const body = await res.text().catch(() => "");
     if (/already|exists|registered/i.test(body) || res.status === 422) {
       log(`Compte admin déjà présent (${ADMIN_EMAIL}).`);
@@ -56,16 +62,46 @@ async function createAdminUser({ url, service }) {
       warn(`Création du compte admin impossible (HTTP ${res.status}) : ${body.slice(0, 200)}`);
       return;
     }
-  } else {
-    log(`Compte admin créé : ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
   }
-  // Promote to admin (the profile trigger defaults to the metadata role, but
-  // enforce it in case the account pre-existed with another role).
-  await fetch(`${url}/rest/v1/profiles?email=eq.${encodeURIComponent(ADMIN_EMAIL)}`, {
-    method: "PATCH",
-    headers: { ...headers, Prefer: "return=minimal" },
-    body: JSON.stringify({ role: "admin" }),
-  }).catch(() => warn("Impossible de forcer le rôle admin (vérifie la table profiles)."));
+
+  // 2. Resolve the user id (needed to create the profile) if not just created.
+  if (!userId) {
+    const list = await fetch(`${url}/auth/v1/admin/users?per_page=500`, { headers }).catch(() => null);
+    if (list?.ok) {
+      const json = await list.json().catch(() => ({}));
+      userId = (json.users ?? []).find((u) => u.email === ADMIN_EMAIL)?.id ?? null;
+    }
+  }
+  if (!userId) {
+    warn("Impossible de récupérer l'identifiant du compte admin — profil non créé.");
+    return;
+  }
+
+  // 3. Resolve the organization id (seed uses a fixed UUID, but query to be safe).
+  let orgId = "00000000-0000-0000-0000-000000000001";
+  const orgRes = await fetch(`${url}/rest/v1/organizations?select=id&limit=1`, { headers }).catch(() => null);
+  if (orgRes?.ok) {
+    const orgs = await orgRes.json().catch(() => []);
+    if (orgs[0]?.id) orgId = orgs[0].id;
+  }
+
+  // 4. Create/repair the profile deterministically (no trigger dependency).
+  const profRes = await fetch(`${url}/rest/v1/profiles`, {
+    method: "POST",
+    headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      id: userId,
+      organization_id: orgId,
+      email: ADMIN_EMAIL,
+      full_name: "Admin",
+      role: "admin",
+    }),
+  }).catch(() => null);
+  if (profRes?.ok) {
+    log("Profil admin rattaché (rôle admin).");
+  } else {
+    warn(`Profil admin non créé : ${profRes ? await profRes.text().catch(() => "") : "réseau"}`);
+  }
 }
 
 async function main() {
