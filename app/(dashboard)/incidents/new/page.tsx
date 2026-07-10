@@ -1,14 +1,44 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createIncident } from "../actions";
-import { IncidentIntake } from "@/components/incidents/IncidentIntake";
+import {
+  IncidentIntake,
+  type MachineOption,
+} from "@/components/incidents/IncidentIntake";
+
+interface MachineRow {
+  id: string;
+  serial_number: string | null;
+  internal_reference: string | null;
+  machine_model_id: string;
+  client_id: string | null;
+  machine_models: { name: string } | null;
+  clients: { name: string } | null;
+}
 
 export default async function NewIncidentPage() {
   const supabase = createClient();
 
-  const [{ data: models }, { data: clients }] = await Promise.all([
+  const [{ data: models }, { data: clients }, { data: machineRows }] = await Promise.all([
     supabase.from("machine_models").select("id, name").eq("active", true).order("name"),
     supabase.from("clients").select("id, name").order("name"),
+    supabase
+      .from("machines")
+      .select(
+        "id, serial_number, internal_reference, machine_model_id, client_id, machine_models(name), clients(name)",
+      )
+      .order("created_at", { ascending: false })
+      .returns<MachineRow[]>(),
   ]);
+
+  const machines: MachineOption[] = (machineRows ?? []).map((m) => ({
+    id: m.id,
+    machineModelId: m.machine_model_id,
+    clientId: m.client_id,
+    label:
+      `${m.machine_models?.name ?? "Machine"} · ${m.serial_number ?? m.internal_reference ?? "?"}` +
+      (m.clients?.name ? ` · ${m.clients.name}` : ""),
+  }));
 
   return (
     <div className="mx-auto max-w-2xl p-8">
@@ -18,8 +48,24 @@ export default async function NewIncidentPage() {
         machine et te signale ce qui manque avant de créer l&apos;incident.
       </p>
 
+      <p className="mt-2 text-xs text-slate-400">
+        Pas encore de client ou de machine ?{" "}
+        <Link href="/clients" className="underline">
+          Ajoute un client
+        </Link>{" "}
+        ·{" "}
+        <Link href="/machines" className="underline">
+          ajoute une machine
+        </Link>
+        .
+      </p>
+
       <div className="mt-6">
-        <IncidentIntake models={models ?? []} clients={clients ?? []} />
+        <IncidentIntake
+          models={models ?? []}
+          clients={clients ?? []}
+          machines={machines}
+        />
       </div>
 
       {/* Fallback: fill everything manually without the assistant. */}

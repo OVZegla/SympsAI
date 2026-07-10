@@ -9,6 +9,13 @@ interface Option {
   name: string;
 }
 
+export interface MachineOption {
+  id: string;
+  label: string;
+  machineModelId: string;
+  clientId: string | null;
+}
+
 /**
  * Conversational incident intake (spec §15-§16). The technician describes the
  * problem; "Analyser" asks the backend what it understood and what is missing.
@@ -18,17 +25,30 @@ interface Option {
 export function IncidentIntake({
   models,
   clients,
+  machines,
 }: {
   models: Option[];
   clients: Option[];
+  machines: MachineOption[];
 }) {
   const [description, setDescription] = useState("");
   const [intake, setIntake] = useState<IntakeResult | null>(null);
   const [chosenModelId, setChosenModelId] = useState("");
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState("");
+  const [machineId, setMachineId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Selecting a specific machine auto-fills its model and client.
+  function onMachineChange(id: string) {
+    setMachineId(id);
+    const m = machines.find((x) => x.id === id);
+    if (m) {
+      setChosenModelId(m.machineModelId);
+      if (m.clientId) setClientId(m.clientId);
+    }
+  }
 
   async function analyze(e: React.FormEvent) {
     e.preventDefault();
@@ -141,6 +161,7 @@ export function IncidentIntake({
           <form action={createIncident} className="space-y-3 border-t border-slate-100 pt-4">
             <input type="hidden" name="description" value={description} />
             <input type="hidden" name="machine_model_id" value={chosenModelId} />
+            <input type="hidden" name="machine_id" value={machineId} />
 
             <label className="block text-sm font-medium text-slate-700">
               Titre
@@ -151,6 +172,24 @@ export function IncidentIntake({
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
               />
             </label>
+
+            {machines.length > 0 && (
+              <label className="block text-sm font-medium text-slate-700">
+                Machine précise (facultatif)
+                <select
+                  value={machineId}
+                  onChange={(e) => onMachineChange(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">—</option>
+                  {machines.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             <label className="block text-sm font-medium text-slate-700">
               Client (facultatif)

@@ -60,11 +60,15 @@ export function TestRunsPanel({
                 action={recordTestResult.bind(null, incidentId, run.id)}
                 className="mt-2 space-y-2"
               >
-                <input
+                <textarea
                   name="notes"
-                  placeholder="Note (ex. multimètre 0 V)"
+                  rows={2}
+                  placeholder="Explique le résultat (ex. le multimètre indique 0 V, le voyant reste éteint…)"
                   className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
                 />
+                <p className="text-[11px] text-slate-400">
+                  Choisis le résultat (l&apos;explication est enregistrée avec) :
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {RESULT_CHOICES.map((c) => (
                     <button
