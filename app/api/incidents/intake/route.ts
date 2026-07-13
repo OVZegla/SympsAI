@@ -1,16 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildIntake, type MachineModelRef } from "@/lib/incidents/intake";
+import {
+  buildIntake,
+  type ClientRef,
+  type MachineModelRef,
+  type MachineRef,
+  type IntakeHints,
+} from "@/lib/incidents/intake";
 import { parseQuery } from "@/lib/ai/query-parser";
+import { extractIntakeEntities } from "@/lib/ai/intake-extractor";
+
+interface MachineRow {
+  id: string;
+  machine_model_id: string;
+  client_id: string | null;
+  serial_number: string | null;
+}
 
 /**
- * POST /api/incidents/intake — conversational incident intake (spec §15-§16).
- * The technician describes the problem; we return what we understood and what is
- * still missing (e.g. the machine model), so the UI can ask for it before the
- * incident is recorded.
+ * POST /api/incidents/intake — conversational incident intake (spec §15-§16,
+ * §25-§26). The technician describes the problem; we return what we understood
+ * (model, client, machine) and the follow-up questions to complete the dossier
+ * (phone, serial number…), so the UI can ask before the incident is recorded.
  *
- * Runs under the caller's RLS. The AI parser is best-effort: if it is
- * unavailable, machine-model matching still works from the description alone.
+ * Runs under the caller's RLS. The AI extractors are best-effort: if they are
+ * unavailable, keyword/regex matching still works from the description alone.
  */
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -25,28 +39,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "description is required" }, { status: 400 });
   }
 
-  const { data: models } = await supabase
-    .from("machine_models")
-    .select("id, name, slug")
-    .eq("active", true)
-    .order("name")
-    .returns<MachineModelRef[]>();
+  const [{ data: models }, { data: clientRows }, { data: machineRows }] =
+    await Promise.all([
+      supabase
+        .from("machine_models")
+        .select("id, name, slug")
+        .eq("active", true)
+        .order("name")
+        .returns<MachineModelRef[]>(),
+      supabase.from("clients").select("id, name").returns<ClientRef[]>(),
+      supabase
+        .from("machines")
+        .select("id, machine_model_id, client_id, serial_number")
+        .returns<MachineRow[]>(),
+    ]);
 
-  // Best-effort AI parse for the machine hint + useful follow-up questions.
-  let parserMachineModel: string | null = null;
+  const machines: MachineRef[] = (machineRows ?? []).map((m) => ({
+    id: m.id,
+    machineModelId: m.machine_model_id,
+    clientId: m.client_id,
+    serialNumber: m.serial_number,
+  }));
+
+  // Best-effort AI extraction, in parallel: the query parser for the machine
+  // hint + follow-up questions, the entity extractor for client/serial.
+  const hints: IntakeHints = {};
   let parserMissingInformation: string[] = [];
-  try {
-    const parsed = await parseQuery(description);
-    parserMachineModel = parsed.value.machine_model;
-    parserMissingInformation = parsed.value.missing_information;
-  } catch {
-    // No AI available — degrade to keyword matching only.
+  const [parsed, entities] = await Promise.allSettled([
+    parseQuery(description),
+    extractIntakeEntities(description),
+  ]);
+  if (parsed.status === "fulfilled") {
+    hints.machineModel = parsed.value.value.machine_model;
+    parserMissingInformation = parsed.value.value.missing_information;
+  }
+  if (entities.status === "fulfilled") {
+    const e = entities.value.value;
+    hints.machineModel = hints.machineModel ?? e.machine_model;
+    hints.clientName = e.client_name;
+    hints.clientPhone = e.client_phone;
+    hints.serialNumber = e.serial_number;
   }
 
   const intake = buildIntake({
     description,
     models: models ?? [],
-    parserMachineModel,
+    clients: clientRows ?? [],
+    machines,
+    hints,
     parserMissingInformation,
   });
 

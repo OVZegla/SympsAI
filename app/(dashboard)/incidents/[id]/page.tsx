@@ -22,12 +22,24 @@ import {
   AttachmentsPanel,
   type AttachmentItem,
 } from "@/components/incidents/AttachmentsPanel";
+import {
+  DossierPanel,
+  type MachineChoice,
+} from "@/components/incidents/DossierPanel";
 import { diagnosticResponseSchema } from "@/lib/ai/schemas";
 
 interface IncidentDetail extends Incident {
   machine_models: { name: string } | null;
   clients: { name: string } | null;
   machines: { serial_number: string | null; internal_reference: string | null } | null;
+}
+
+interface MachineRow {
+  id: string;
+  serial_number: string | null;
+  internal_reference: string | null;
+  machine_models: { name: string } | null;
+  clients: { name: string } | null;
 }
 
 const AUTHOR_LABELS: Record<MessageAuthor, string> = {
@@ -82,6 +94,26 @@ export default async function IncidentDetailPage({
       .returns<AvailableTest[]>();
     availableTests = data ?? [];
   }
+
+  // Reference lists for the dossier-correction panel ("c'était une M1 en
+  // fait, pas une Opaline" — spec §24-§26).
+  const [{ data: allModels }, { data: allClients }, { data: machineRows }] =
+    await Promise.all([
+      supabase.from("machine_models").select("id, name").eq("active", true).order("name"),
+      supabase.from("clients").select("id, name").order("name"),
+      supabase
+        .from("machines")
+        .select("id, serial_number, internal_reference, machine_models(name), clients(name)")
+        .order("created_at", { ascending: false })
+        .returns<MachineRow[]>(),
+    ]);
+
+  const machineChoices: MachineChoice[] = (machineRows ?? []).map((m) => ({
+    id: m.id,
+    label:
+      `${m.machine_models?.name ?? "Machine"} · ${m.serial_number ?? m.internal_reference ?? "?"}` +
+      (m.clients?.name ? ` · ${m.clients.name}` : ""),
+  }));
 
   const { data: attachments } = await supabase
     .from("attachments")
@@ -196,6 +228,24 @@ export default async function IncidentDetailPage({
               {formatDate(incident.opened_at)}
             </p>
           </ContextBlock>
+
+          <DossierPanel
+            incidentId={incident.id}
+            current={{
+              machineModelId: incident.machine_model_id,
+              machineModelName: incident.machine_models?.name ?? null,
+              clientId: incident.client_id,
+              clientName: incident.clients?.name ?? null,
+              machineId: incident.machine_id,
+              machineSerial:
+                incident.machines?.serial_number ??
+                incident.machines?.internal_reference ??
+                null,
+            }}
+            models={allModels ?? []}
+            clients={allClients ?? []}
+            machines={machineChoices}
+          />
 
           <TestRunsPanel
             incidentId={incident.id}

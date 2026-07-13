@@ -42,6 +42,19 @@ export const parsedQuerySchema = z.object({
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;
 
+// --- Intake entity extraction (spec §15, §25-§26) ----------------------------
+// Entities named in an incident description ("c'est Dupont qui a un problème
+// avec sa M1 n° 12345") so the intake can create/complete the dossier. Every
+// field is null when not explicitly stated — never invented.
+export const intakeEntitiesSchema = z.object({
+  client_name: z.string().nullable(),
+  client_phone: z.string().nullable(),
+  client_email: z.string().nullable(),
+  machine_model: z.string().nullable(),
+  serial_number: z.string().nullable(),
+});
+export type IntakeEntities = z.infer<typeof intakeEntitiesSchema>;
+
 // --- Diagnostic response contract (spec §36) --------------------------------
 // The model returns this JSON; the UI turns it into the rendered answer so the
 // model never controls the full presentation.
