@@ -101,6 +101,23 @@ export async function confirmAndClose(incidentId: string, formData: FormData) {
     },
   ]);
 
+  // 6. Mode apprentissage contrôlé (§17E) : si le technicien a formulé une
+  //    leçon réutilisable, elle part en PENDING_REVIEW — jamais confirmée
+  //    automatiquement, un admin doit la valider sur /knowledge.
+  const knowledgeStatement = String(formData.get("knowledge_statement") || "").trim();
+  if (knowledgeStatement) {
+    await supabase.from("knowledge_submissions").insert({
+      organization_id: incident.organization_id,
+      statement: knowledgeStatement,
+      category: "terrain",
+      machine_model_id: incident.machine_model_id,
+      incident_id: incidentId,
+      source_note: `Résolution de l'incident « ${incident.title} » — cause : ${causeName}.`,
+      status: "PENDING_REVIEW",
+      submitted_by: profile.id,
+    });
+  }
+
   await recordAudit(supabase, {
     organizationId: incident.organization_id,
     userId: profile.id,

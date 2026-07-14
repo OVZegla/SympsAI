@@ -9,6 +9,7 @@ import { buildEvidenceDossier } from "@/lib/rag/context-builder";
 import { formatEvidence, evidenceCount } from "@/lib/ai/context-format";
 import { runEngine, type EngineTestResult } from "@/lib/diagnosis/engine";
 import { formatEngineResult } from "@/lib/diagnosis/format";
+import { matchesCondition } from "@/lib/knowledge/base";
 
 /**
  * The Phase 4 assistant (spec §58, §20, §36). Pipeline:
@@ -171,10 +172,25 @@ export async function runDiagnosis(
       status: r.status as EngineTestResult["status"],
     }));
 
-  const engineResult = runEngine({
-    text: [incident?.description_initial, query].filter(Boolean).join("\n"),
-    performedTests,
-  });
+  const engineText = [incident?.description_initial, query].filter(Boolean).join("\n");
+  const engineResult = runEngine({ text: engineText, performedTests });
+
+  // 2a-bis. Connaissances du terrain VALIDÉES (mode apprentissage contrôlé) :
+  //         seules les soumissions confirmées par un admin entrent ici, avec
+  //         « validation interne » comme source. Jamais les PENDING_REVIEW.
+  const { data: fieldKnowledge } = await supabase
+    .from("knowledge_submissions")
+    .select("statement, keywords, source_note")
+    .eq("status", "CONFIRMED")
+    .returns<{ statement: string; keywords: string | null; source_note: string | null }[]>();
+
+  const relevantFieldKnowledge = (fieldKnowledge ?? [])
+    .filter((k) => {
+      if (!k.keywords) return true; // pas de mots-clés → toujours pertinent
+      const keywordList = k.keywords.split(",").map((s) => s.trim()).filter(Boolean);
+      return matchesCondition(engineText, { all: [keywordList] });
+    })
+    .slice(0, 6);
 
   // 2b. Retrieval → evidence dossier.
   const dossier = await buildEvidenceDossier(supabase, searchQuery, { machineModelId });
@@ -209,9 +225,18 @@ export async function runDiagnosis(
     engineResult.normalBehaviors.length > 0 ||
     engineResult.unknowns.length > 0 ||
     engineResult.facts.length > 0;
+  const fieldBlock =
+    relevantFieldKnowledge.length > 0
+      ? `# Connaissances du terrain validées par Symp's (cite « Validation interne »)\n` +
+        relevantFieldKnowledge
+          .map((k) => `- ${k.statement}${k.source_note ? ` (origine : ${k.source_note})` : ""}`)
+          .join("\n") +
+        "\n\n"
+      : "";
   const userContent =
     `# Problème décrit par le technicien\n${query}\n\n` +
     `# Analyse du moteur déterministe Symp's (AUTORITAIRE : appuie-toi dessus, cite ses sources)\n${engineBlock}\n\n` +
+    fieldBlock +
     `# Dossier de preuves (ne cite QUE ces sources et celles du moteur)\n${formatEvidence(dossier)}\n\n` +
     (evidenceCount(dossier) === 0 && !engineHasFindings
       ? "Aucune source pertinente n'a été trouvée. Utilise l'état insufficient_evidence " +

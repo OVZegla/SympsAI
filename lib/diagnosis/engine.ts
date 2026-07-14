@@ -112,6 +112,33 @@ export interface EngineResult {
 
 const SAFETY_ORDER = { SAFE: 0, CAUTION: 1, STOP_MACHINE: 2 } as const;
 
+/** Fonctions détectables comme « ça marche » dans une phrase du technicien. */
+const FUNCTION_TERMS = ["couleur", "blanc", "manuel", "communication", "impression"];
+const WORKS_VERBS = "fonctionne|marche|sort|reussi|correcte?|present|ok";
+
+/**
+ * Détecte les fonctions déclarées FONCTIONNELLES dans le texte
+ * (« la couleur fonctionne », « le blanc sort au flash »). Une mention niée
+ * (« ne sort pas », « ne fonctionne plus ») n'est pas retenue : le doute
+ * profite au diagnostic. Sert à déprioriser les dépendances communes
+ * (Base §0 règle 2) sans que le technicien ait à remplir un formulaire.
+ */
+export function detectWorkingFunctions(text: string): string[] {
+  const haystack = normalizeText(text);
+  const found: string[] = [];
+  for (const fn of FUNCTION_TERMS) {
+    const re = new RegExp(
+      `(?<![a-z0-9])${fn}([^.!?\\n]{0,40}?)(?:${WORKS_VERBS})(?![a-z])( pas| plus)?`,
+    );
+    const m = re.exec(haystack);
+    if (!m) continue;
+    if (m[2]) continue; // « fonctionne pas / plus »
+    if (/\b(ne|n)\b/.test(m[1] ?? "")) continue; // « ne … pas » entre les deux
+    found.push(fn);
+  }
+  return found;
+}
+
 /** Résout un résultat de test enregistré vers le test guidé correspondant. */
 function resolveGuidedTest(result: EngineTestResult): GuidedTest | null {
   if (result.testId && GUIDED_TEST_INDEX.has(result.testId)) {
@@ -126,7 +153,13 @@ function resolveGuidedTest(result: EngineTestResult): GuidedTest | null {
 
 export function runEngine(input: EngineInput): EngineResult {
   const text = input.text;
-  const working = (input.workingFunctions ?? []).map(normalizeText);
+  // Fonctions qui marchent : celles fournies + celles détectées dans le texte.
+  const working = [
+    ...new Set([
+      ...(input.workingFunctions ?? []).map(normalizeText),
+      ...detectWorkingFunctions(text),
+    ]),
+  ];
   const performed = input.performedTests ?? [];
 
   // 1. Règles dont les conditions matchent les observations.
@@ -173,7 +206,7 @@ export function runEngine(input: EngineInput): EngineResult {
           Math.max(LIKELIHOOD_RANK[hyp.likelihood] - 2, 1),
         );
         hyp.contradictingEvidence.push(
-          `La fonction « ${input.workingFunctions!.join(", ")} » fonctionne : une dépendance commune est moins probable (sans être impossible).`,
+          `La fonction « ${working.join(", ")} » fonctionne : une dépendance commune est moins probable (sans être impossible).`,
         );
       }
     }

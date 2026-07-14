@@ -8,6 +8,19 @@ import {
   formatSource,
 } from "@/lib/knowledge/base";
 import type { CertaintyLevel } from "@/lib/knowledge/base";
+import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth";
+import { submitKnowledge, reviewKnowledge } from "./actions";
+
+interface SubmissionRow {
+  id: string;
+  statement: string;
+  category: string;
+  status: string;
+  source_note: string | null;
+  created_at: string;
+  machine_models: { name: string } | null;
+}
 
 /**
  * Base Symp's v0.1 — consultation de la couche connaissance (§16-§17F du
@@ -40,11 +53,27 @@ const SAFETY_LABEL = {
   STOP_MACHINE: "🔴 Machine éteinte",
 } as const;
 
-export default function KnowledgePage({
+export default async function KnowledgePage({
   searchParams,
 }: {
   searchParams: { q?: string; category?: string; certainty?: string };
 }) {
+  const profile = await requireProfile();
+  const supabase = createClient();
+
+  const [{ data: submissions }, { data: models }] = await Promise.all([
+    supabase
+      .from("knowledge_submissions")
+      .select("id, statement, category, status, source_note, created_at, machine_models(name)")
+      .in("status", ["PENDING_REVIEW", "CONFIRMED"])
+      .order("created_at", { ascending: false })
+      .returns<SubmissionRow[]>(),
+    supabase.from("machine_models").select("id, name").eq("active", true).order("name"),
+  ]);
+
+  const pending = (submissions ?? []).filter((s) => s.status === "PENDING_REVIEW");
+  const confirmed = (submissions ?? []).filter((s) => s.status === "CONFIRMED");
+
   const q = normalizeText(searchParams.q ?? "");
   const category = searchParams.category ?? "";
   const certainty = searchParams.certainty ?? "";
@@ -113,6 +142,118 @@ export default function KnowledgePage({
 
       <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
         <div className="space-y-3">
+          {/* Mode apprentissage contrôlé (§17E) : connaissances du terrain */}
+          {pending.length > 0 && (
+            <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-amber-900">
+                En attente de validation ({pending.length})
+              </h2>
+              <ul className="space-y-3">
+                {pending.map((s) => (
+                  <li key={s.id} className="rounded-md bg-white p-3">
+                    <p className="text-sm text-slate-800">{s.statement}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {s.machine_models?.name ? `${s.machine_models.name} · ` : ""}
+                      {s.source_note ?? s.category}
+                    </p>
+                    {profile.role === "admin" ? (
+                      <div className="mt-2 flex gap-2">
+                        <form action={reviewKnowledge.bind(null, s.id, "CONFIRMED")}>
+                          <button className="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white hover:bg-green-800">
+                            ✔ Confirmer
+                          </button>
+                        </form>
+                        <form action={reviewKnowledge.bind(null, s.id, "REJECTED")}>
+                          <button className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100">
+                            ✕ Rejeter
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Un admin doit la confirmer avant qu&apos;elle serve au diagnostic.
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {confirmed.length > 0 && (
+            <section className="rounded-lg border border-green-200 bg-green-50 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-green-900">
+                Connaissances du terrain validées ({confirmed.length})
+              </h2>
+              <ul className="space-y-2">
+                {confirmed.map((s) => (
+                  <li key={s.id} className="rounded-md bg-white p-3">
+                    <p className="text-sm text-slate-800">{s.statement}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {s.machine_models?.name ? `${s.machine_models.name} · ` : ""}
+                      Validation interne{s.source_note ? ` · ${s.source_note}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Proposer un fait à la main */}
+          <details className="rounded-lg border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              ➕ Proposer une connaissance
+            </summary>
+            <form action={submitKnowledge} className="mt-3 space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Le fait / la règle *
+                <textarea
+                  name="statement"
+                  required
+                  rows={2}
+                  placeholder="Ex. Sur Opaline, le capteur bas décroche quand la température dépasse 35 °C."
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Machine concernée
+                  <select
+                    name="machine_model_id"
+                    defaultValue=""
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">Toutes</option>
+                    {(models ?? []).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Mots-clés déclencheurs
+                  <input
+                    name="keywords"
+                    placeholder="capteur bas, température"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  />
+                </label>
+              </div>
+              <label className="block text-sm font-medium text-slate-700">
+                Source (d&apos;où vient cette info ?)
+                <input
+                  name="source_note"
+                  placeholder="Test terrain du 12/07, confirmation Loïc…"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                Soumettre pour validation
+              </button>
+            </form>
+          </details>
+
           {items.map((item) => (
             <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">

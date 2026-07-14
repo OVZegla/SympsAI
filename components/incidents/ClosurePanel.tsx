@@ -53,6 +53,20 @@ export function ClosurePanel({ incidentId }: { incidentId: string }) {
           />
         </label>
 
+        <label className="block text-xs font-medium text-slate-600">
+          Soumettre une leçon à la base de connaissance (facultatif)
+          <textarea
+            name="knowledge_statement"
+            rows={2}
+            placeholder="Ex. Sur M1, un liseré blanc régulier venait d'une contraction de sélection oubliée dans Photoshop."
+            className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+          />
+          <span className="mt-0.5 block text-[11px] font-normal text-slate-400">
+            Elle restera « en attente de validation » jusqu&apos;à ce qu&apos;un
+            admin la confirme sur la page Connaissance.
+          </span>
+        </label>
+
         <button className="w-full rounded bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800">
           Valider &amp; clôturer
         </button>

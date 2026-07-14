@@ -27,6 +27,8 @@ import {
   type MachineChoice,
 } from "@/components/incidents/DossierPanel";
 import { diagnosticResponseSchema } from "@/lib/ai/schemas";
+import { NextCheckCard } from "@/components/incidents/NextCheckCard";
+import { runEngine, type EngineTestResult } from "@/lib/diagnosis/engine";
 
 interface IncidentDetail extends Incident {
   machine_models: { name: string } | null;
@@ -122,6 +124,28 @@ export default async function IncidentDetailPage({
     .order("created_at", { ascending: true })
     .returns<AttachmentItem[]>();
 
+  // Carte « Prochaine vérification » : le moteur déterministe tourne côté
+  // serveur sur la description + les messages du technicien + les tests déjà
+  // réalisés. Zéro LLM — disponible même quand Ollama est éteint.
+  const engineText = [
+    incident.description_initial,
+    ...(messages ?? [])
+      .filter((m) => m.author_type === "user")
+      .map((m) => m.content ?? ""),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const performedForEngine: EngineTestResult[] = (testRuns ?? [])
+    .filter((r) =>
+      ["passed", "failed", "inconclusive", "not_applicable", "cancelled"].includes(r.status),
+    )
+    .map((r) => ({
+      text: [r.diagnostic_tests?.title, r.result_notes].filter(Boolean).join(" — "),
+      status: r.status as EngineTestResult["status"],
+    }));
+  const engine = runEngine({ text: engineText, performedTests: performedForEngine });
+  const incidentOpen = incident.status !== "closed";
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
@@ -206,6 +230,8 @@ export default async function IncidentDetailPage({
 
         {/* Context column (spec §42) */}
         <aside className="w-72 shrink-0 space-y-5 overflow-auto border-l border-slate-200 bg-white p-5">
+          {incidentOpen && <NextCheckCard incidentId={incident.id} engine={engine} />}
+
           <ContextBlock title="Machine">
             <p className="text-sm text-slate-800">
               {incident.machine_models?.name ?? "—"}
@@ -258,9 +284,24 @@ export default async function IncidentDetailPage({
             attachments={attachments ?? []}
           />
 
-          {incident.status !== "closed" && (
-            <ClosurePanel incidentId={incident.id} />
-          )}
+          <ContextBlock title="Rapports">
+              <div className="space-y-1">
+                <a
+                  href={`/api/incidents/${incident.id}/report?type=transmission`}
+                  className="block rounded border border-slate-300 px-2 py-1 text-center text-xs text-slate-700 hover:bg-slate-100"
+                >
+                  📤 Résumé de transmission (FR/EN)
+                </a>
+                <a
+                  href={`/api/incidents/${incident.id}/report?type=final`}
+                  className="block rounded border border-slate-300 px-2 py-1 text-center text-xs text-slate-700 hover:bg-slate-100"
+                >
+                  📋 Rapport final
+                </a>
+              </div>
+          </ContextBlock>
+
+          {incident.status !== "closed" && <ClosurePanel incidentId={incident.id} />}
         </aside>
       </div>
     </div>
