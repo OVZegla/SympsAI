@@ -127,6 +127,48 @@ export default async function MachinesPage() {
             <textarea name="notes" rows={2} className={inputClass} />
           </label>
 
+          {/* Profil détaillé (Base Symp's) : une règle peut n'être valable que
+              pour certaines générations/versions. */}
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-slate-600">
+              Profil détaillé (génération, versions…)
+            </summary>
+            <div className="mt-3 space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Génération
+                <input name="generation" className={inputClass} placeholder="Gen 2" />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Montage
+                <select name="mounting_type" className={inputClass} defaultValue="">
+                  <option value="">—</option>
+                  <option value="ancien">Ancien montage</option>
+                  <option value="nouveau">Nouveau montage</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Type de tête
+                <input name="head_type" className={inputClass} placeholder="Epson I1600" />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Version BetterPrinter
+                <input name="betterprinter_version" className={inputClass} />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Version UltraPrint
+                <input name="ultraprint_version" className={inputClass} />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Modifications déjà réalisées
+                <textarea name="modifications" rows={2} className={inputClass} />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Pièces déjà remplacées
+                <textarea name="replaced_parts" rows={2} className={inputClass} />
+              </label>
+            </div>
+          </details>
+
           <button
             type="submit"
             className="w-full rounded-md bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-800"

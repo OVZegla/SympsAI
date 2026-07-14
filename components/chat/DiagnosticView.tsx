@@ -84,6 +84,20 @@ export function DiagnosticView({ data }: { data: DiagnosticResponse }) {
         </Block>
       )}
 
+      {(data.unknowns ?? []).length > 0 && (
+        <Block title="Non documenté dans la base Symp's">
+          <ul className="list-disc pl-5 text-amber-800">
+            {(data.unknowns ?? []).map((u, i) => (
+              <li key={i}>{u}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-slate-400">
+            L&apos;assistant ne complète jamais ces points par imagination : un
+            test contrôlé ou une validation est nécessaire.
+          </p>
+        </Block>
+      )}
+
       {data.sources.length > 0 && (
         <Block title="Sources utilisées">
           <ul className="space-y-1">

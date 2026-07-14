@@ -7,6 +7,8 @@ import { parseQuery, searchQueryFromParsed } from "@/lib/ai/query-parser";
 import { diagnosticResponseSchema, type DiagnosticResponse } from "@/lib/ai/schemas";
 import { buildEvidenceDossier } from "@/lib/rag/context-builder";
 import { formatEvidence, evidenceCount } from "@/lib/ai/context-format";
+import { runEngine, type EngineTestResult } from "@/lib/diagnosis/engine";
+import { formatEngineResult } from "@/lib/diagnosis/format";
 
 /**
  * The Phase 4 assistant (spec §58, §20, §36). Pipeline:
@@ -79,6 +81,7 @@ const DIAGNOSIS_INPUT_SCHEMA: Record<string, unknown> = {
       required: ["title", "reason", "test_id", "procedure_id", "risk_level"],
     },
     questions: { type: "array", items: { type: "string" } },
+    unknowns: { type: "array", items: { type: "string" } },
     support_level: { type: "string", enum: ["none", "low", "moderate", "high"] },
     sources: {
       type: "array",
@@ -101,6 +104,7 @@ const DIAGNOSIS_INPUT_SCHEMA: Record<string, unknown> = {
     "hypotheses",
     "recommended_action",
     "questions",
+    "unknowns",
     "support_level",
     "sources",
   ],
@@ -138,14 +142,59 @@ export async function runDiagnosis(
     console.error("[diagnosis] query parse failed, using raw text:", (err as Error).message);
   }
 
-  // 2. Retrieval → evidence dossier.
+  // 2a. Couche 2 — moteur déterministe sur la description initiale, le dernier
+  //     message et les tests DÉJÀ réalisés (ils modifient les hypothèses et ne
+  //     sont jamais redemandés).
+  const [{ data: incident }, { data: testRuns }] = await Promise.all([
+    supabase
+      .from("incidents")
+      .select("description_initial")
+      .eq("id", incidentId)
+      .maybeSingle<{ description_initial: string | null }>(),
+    supabase
+      .from("incident_test_runs")
+      .select("status, result_notes, diagnostic_tests(title, code)")
+      .eq("incident_id", incidentId)
+      .returns<
+        {
+          status: string;
+          result_notes: string | null;
+          diagnostic_tests: { title: string; code: string | null } | null;
+        }[]
+      >(),
+  ]);
+
+  const performedTests: EngineTestResult[] = (testRuns ?? [])
+    .filter((r) => ["passed", "failed", "inconclusive", "not_applicable", "cancelled"].includes(r.status))
+    .map((r) => ({
+      text: [r.diagnostic_tests?.title, r.result_notes].filter(Boolean).join(" — "),
+      status: r.status as EngineTestResult["status"],
+    }));
+
+  const engineResult = runEngine({
+    text: [incident?.description_initial, query].filter(Boolean).join("\n"),
+    performedTests,
+  });
+
+  // 2b. Retrieval → evidence dossier.
   const dossier = await buildEvidenceDossier(supabase, searchQuery, { machineModelId });
 
   // Persist the retrieval run for observability (spec §48).
   await supabase.from("retrieval_runs").insert({
     incident_id: incidentId,
     user_query: query,
-    parsed_query_json: { searchQuery },
+    parsed_query_json: {
+      searchQuery,
+      // Observabilité de la couche déterministe (§48) : quelles règles de la
+      // Base ont matché et ce qui a été injecté au modèle.
+      engine: {
+        matchedRules: engineResult.matchedRules.map((r) => r.id),
+        hypotheses: engineResult.hypotheses.map((h) => ({ id: h.id, likelihood: h.likelihood })),
+        unknowns: engineResult.unknowns.map((u) => u.id),
+        normalBehaviors: engineResult.normalBehaviors.map((nb) => nb.id),
+        sources: engineResult.sourceRefs,
+      },
+    },
     filters_json: { machineModelId },
     retrieved_documents_json: [...dossier.procedures, ...dossier.documentation],
     retrieved_incidents_json: [...dossier.resolvedIncidents, ...dossier.openIncidents],
@@ -154,14 +203,22 @@ export async function runDiagnosis(
   // 3. Ask the configured model (local Ollama by default, Claude if selected)
   //    for the structured diagnosis grounded on the dossier.
   const system = await loadPrompt(PROMPT_VERSIONS.diagnostic);
+  const engineBlock = formatEngineResult(engineResult);
+  const engineHasFindings =
+    engineResult.matchedRules.length > 0 ||
+    engineResult.normalBehaviors.length > 0 ||
+    engineResult.unknowns.length > 0 ||
+    engineResult.facts.length > 0;
   const userContent =
     `# Problème décrit par le technicien\n${query}\n\n` +
-    `# Dossier de preuves (ne cite QUE ces sources)\n${formatEvidence(dossier)}\n\n` +
-    (evidenceCount(dossier) === 0
+    `# Analyse du moteur déterministe Symp's (AUTORITAIRE : appuie-toi dessus, cite ses sources)\n${engineBlock}\n\n` +
+    `# Dossier de preuves (ne cite QUE ces sources et celles du moteur)\n${formatEvidence(dossier)}\n\n` +
+    (evidenceCount(dossier) === 0 && !engineHasFindings
       ? "Aucune source pertinente n'a été trouvée. Utilise l'état insufficient_evidence " +
         "et explique honnêtement que tu ne peux pas confirmer de cause."
-      : "Produis un diagnostic progressif : un seul prochain test, sépare faits/hypothèses, " +
-        "cite les sources par leur référence.");
+      : "Produis un diagnostic progressif : un seul prochain test (le premier recommandé par le moteur " +
+        "s'il y en a), sépare faits/hypothèses, pose au plus deux questions ciblées, " +
+        "reporte les inconnues du moteur dans le champ unknowns, cite les sources par leur référence.");
 
   const result = await getLLMService().run("primary", {
     system,

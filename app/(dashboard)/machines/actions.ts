@@ -27,6 +27,15 @@ export async function createMachine(formData: FormData) {
     software_version: field(formData, "software_version"),
     installation_date: field(formData, "installation_date"),
     notes: field(formData, "notes"),
+    // Profil détaillé (Base Symp's) : génération/versions peuvent changer le
+    // diagnostic, une règle peut n'être valable que pour certains montages.
+    generation: field(formData, "generation"),
+    mounting_type: field(formData, "mounting_type"),
+    head_type: field(formData, "head_type"),
+    betterprinter_version: field(formData, "betterprinter_version"),
+    ultraprint_version: field(formData, "ultraprint_version"),
+    modifications: field(formData, "modifications"),
+    replaced_parts: field(formData, "replaced_parts"),
   });
   if (error) throw new Error(error.message);
 

@@ -86,6 +86,10 @@ export const diagnosticResponseSchema = z.object({
     })
     .nullable(),
   questions: z.array(z.string()),
+  // Inconnues contrôlées (Base Symp's §13) : ce qui n'est pas documenté et ne
+  // doit pas être complété par imagination. Optionnel pour rester compatible
+  // avec les réponses déjà stockées.
+  unknowns: z.array(z.string()).optional(),
   support_level: supportLevelSchema,
   sources: z.array(
     z.object({

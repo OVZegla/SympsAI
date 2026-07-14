@@ -21,7 +21,7 @@ export async function loadPrompt(version: string): Promise<string> {
 }
 
 export const PROMPT_VERSIONS = {
-  diagnostic: "diagnostic-system-v1",
+  diagnostic: "diagnostic-system-v2",
   queryParser: "query-parser-v1",
   intakeExtractor: "intake-extractor-v1",
   incidentClosure: "incident-closure-v1",
