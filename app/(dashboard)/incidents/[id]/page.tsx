@@ -287,6 +287,12 @@ export default async function IncidentDetailPage({
           <ContextBlock title="Rapports">
               <div className="space-y-1">
                 <a
+                  href={`/incidents/${incident.id}/sav`}
+                  className="block rounded border border-slate-300 px-2 py-1 text-center text-xs text-slate-700 hover:bg-slate-100"
+                >
+                  📝 Fiche SAV / intervention
+                </a>
+                <a
                   href={`/api/incidents/${incident.id}/report?type=transmission`}
                   className="block rounded border border-slate-300 px-2 py-1 text-center text-xs text-slate-700 hover:bg-slate-100"
                 >

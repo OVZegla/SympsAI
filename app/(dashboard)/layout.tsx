@@ -25,7 +25,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white p-4">
+      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white p-4 print:hidden">
         <Link href="/dashboard" className="px-3 py-2">
           <p className="text-lg font-bold tracking-tight text-slate-900">
             SYMP&apos;S <span className="text-slate-400">AI</span>
