@@ -20,8 +20,15 @@ describe("mimeForFilename", () => {
     expect(mimeForFilename("liste.TXT")).toBe("text/plain");
   });
 
-  it("ignore les formats non importables", () => {
+  it("prend en charge les photos (importées sans extraction)", () => {
+    expect(mimeForFilename("carte-principale.jpg")).toBe("image/jpeg");
+    expect(mimeForFilename("IMG_0042.HEIC")).toBe("image/heic");
+    expect(mimeForFilename("capture.png")).toBe("image/png");
+  });
+
+  it("ignore les vidéos et autres formats non importables", () => {
     expect(mimeForFilename("video.mp4")).toBeNull();
+    expect(mimeForFilename("demo.mov")).toBeNull();
     expect(mimeForFilename("archive.zip")).toBeNull();
     expect(mimeForFilename("sans-extension")).toBeNull();
   });
@@ -34,9 +41,10 @@ describe("titleFromFilename", () => {
 });
 
 describe("planSync", () => {
-  it("importe les nouveaux, re-versionne les modifiés, laisse le reste", () => {
+  it("importe les nouveaux (PDF + photos), re-versionne les modifiés, ignore les vidéos", () => {
     const remote = [
       file("nouveau.pdf", "r1"),
+      file("photo-carte.jpg", "r5"),
       file("modifie.pdf", "r2-nouvelle"),
       file("inchange.md", "r3"),
       file("video.mp4", "r4"),
@@ -47,12 +55,19 @@ describe("planSync", () => {
     ];
 
     const plan = planSync(remote, existing);
-    expect(plan.toCreate.map((f) => f.name)).toEqual(["nouveau.pdf"]);
+    expect(plan.toCreate.map((f) => f.name)).toEqual(["nouveau.pdf", "photo-carte.jpg"]);
     expect(plan.toUpdate).toEqual([
-      { file: remote[1], documentId: "d1" },
+      { file: remote[2], documentId: "d1" },
     ]);
     expect(plan.unchanged).toBe(1);
     expect(plan.ignored).toEqual(["video.mp4"]);
+  });
+
+  it("écarte les fichiers trop volumineux sans les traiter en erreur", () => {
+    const big = { ...file("scan-geant.pdf", "r9"), size: 200 * 1024 * 1024 };
+    const plan = planSync([big], []);
+    expect(plan.toCreate).toHaveLength(0);
+    expect(plan.tooLarge).toEqual(["scan-geant.pdf"]);
   });
 
   it("ne réimporte rien quand les révisions sont identiques", () => {

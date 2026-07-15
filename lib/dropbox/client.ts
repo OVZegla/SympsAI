@@ -22,8 +22,7 @@ export function getDropboxConfig(
   const appSecret = env.DROPBOX_APP_SECRET;
   const refreshToken = env.DROPBOX_REFRESH_TOKEN;
   if (!appKey || !appSecret || !refreshToken) return null;
-  let folder = (env.DROPBOX_FOLDER ?? "").trim();
-  if (folder === "/") folder = "";
+  let folder = (env.DROPBOX_FOLDER ?? "").trim().replace(/\/+$/, "");
   if (folder && !folder.startsWith("/")) folder = `/${folder}`;
   return { appKey, appSecret, refreshToken, folder };
 }
@@ -97,9 +96,32 @@ async function rpc<T>(token: string, endpoint: string, body: unknown): Promise<T
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new DropboxError(`Dropbox ${endpoint} a échoué (HTTP ${res.status}).`, await res.text());
+    const detail = await res.text();
+    // 409 = erreur métier Dropbox (ex. path/not_found) : la traduire clairement
+    // au lieu d'un code HTTP opaque.
+    if (res.status === 409 && detail.includes("not_found")) {
+      throw new DropboxError("DROPBOX_PATH_NOT_FOUND", detail);
+    }
+    throw new DropboxError(`Dropbox ${endpoint} a échoué (HTTP ${res.status}).`, detail);
   }
   return (await res.json()) as T;
+}
+
+/** Dossiers à la racine visible du compte/app (pour guider la configuration). */
+async function listRootFolders(token: string): Promise<string[]> {
+  try {
+    const page = await rpc<ListFolderResponse>(token, "files/list_folder", {
+      path: "",
+      recursive: false,
+      limit: 100,
+    });
+    return page.entries
+      .filter((e) => e[".tag"] === "folder")
+      .map((e) => e.path_display ?? e.name)
+      .slice(0, 15);
+  } catch {
+    return [];
+  }
 }
 
 /** Liste récursivement les FICHIERS du dossier configuré. */
@@ -107,12 +129,31 @@ export async function listDropboxFiles(config: DropboxConfig): Promise<DropboxFi
   const token = await getAccessToken(config);
   const files: DropboxFile[] = [];
 
-  let page = await rpc<ListFolderResponse>(token, "files/list_folder", {
-    path: config.folder,
-    recursive: true,
-    include_deleted: false,
-    limit: 500,
-  });
+  let page: ListFolderResponse;
+  try {
+    page = await rpc<ListFolderResponse>(token, "files/list_folder", {
+      path: config.folder,
+      recursive: true,
+      include_deleted: false,
+      limit: 500,
+    });
+  } catch (err) {
+    if (err instanceof DropboxError && err.message === "DROPBOX_PATH_NOT_FOUND") {
+      // Dossier introuvable : montrer ce qui existe vraiment pour corriger la
+      // config sans deviner (app « App folder » vs « Full Dropbox », faute de
+      // frappe…).
+      const roots = await listRootFolders(token);
+      throw new DropboxError(
+        `Le dossier « ${config.folder || "/"} » n'existe pas dans ce Dropbox. ` +
+          (roots.length > 0
+            ? `Dossiers visibles à la racine : ${roots.join(", ")}. `
+            : "Aucun dossier visible à la racine (app de type « App folder » ? Les chemins partent alors de son dossier dédié). ") +
+          "Corrige DROPBOX_FOLDER dans .env.local (ou relance npm run dropbox:link) puis redémarre.",
+        err.detail,
+      );
+    }
+    throw err;
+  }
   for (;;) {
     for (const e of page.entries) {
       if (e[".tag"] === "file" && e.path_lower && e.rev) {

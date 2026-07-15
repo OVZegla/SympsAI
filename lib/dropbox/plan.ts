@@ -10,6 +10,7 @@ export interface RemoteFile {
   pathDisplay: string;
   pathLower: string;
   rev: string;
+  size?: number;
 }
 
 export interface ExistingDropboxDoc {
@@ -22,11 +23,19 @@ export interface SyncPlan {
   toCreate: RemoteFile[];
   toUpdate: { file: RemoteFile; documentId: string }[];
   unchanged: number;
-  /** Fichiers ignorés (format non pris en charge), pour l'afficher à l'utilisateur. */
+  /** Fichiers non importés (vidéos & formats non pris en charge). */
   ignored: string[];
+  /** Fichiers trop volumineux pour l'import automatique. */
+  tooLarge: string[];
 }
 
-/** Formats importables : texte + PDF (extraction locale via unpdf). */
+/**
+ * Formats importables. Les dossiers Dropbox mélangent PDF, photos et vidéos :
+ * - texte/PDF → texte extrait, découpé, indexé (cherchable) ;
+ * - photos → importées et conservées telles quelles (consultables, prêtes
+ *   pour l'analyse vision), sans extraction de texte ;
+ * - vidéos → ignorées volontairement (trop lourdes, pas exploitables).
+ */
 const SUPPORTED: Record<string, string> = {
   ".pdf": "application/pdf",
   ".md": "text/markdown",
@@ -36,7 +45,19 @@ const SUPPORTED: Record<string, string> = {
   ".csv": "text/csv",
   ".json": "application/json",
   ".xml": "application/xml",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".heic": "image/heic",
+  ".bmp": "image/bmp",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
 };
+
+/** Au-delà, on n'importe pas automatiquement (garde la synchro rapide). */
+export const MAX_IMPORT_BYTES = 50 * 1024 * 1024; // 50 Mo
 
 export function mimeForFilename(name: string): string | null {
   const dot = name.lastIndexOf(".");
@@ -56,11 +77,21 @@ export function planSync(
   existing: ExistingDropboxDoc[],
 ): SyncPlan {
   const byPath = new Map(existing.map((d) => [d.sourcePath.toLowerCase(), d]));
-  const plan: SyncPlan = { toCreate: [], toUpdate: [], unchanged: 0, ignored: [] };
+  const plan: SyncPlan = {
+    toCreate: [],
+    toUpdate: [],
+    unchanged: 0,
+    ignored: [],
+    tooLarge: [],
+  };
 
   for (const file of files) {
     if (!mimeForFilename(file.name)) {
       plan.ignored.push(file.name);
+      continue;
+    }
+    if ((file.size ?? 0) > MAX_IMPORT_BYTES) {
+      plan.tooLarge.push(file.name);
       continue;
     }
     const known = byPath.get(file.pathLower);

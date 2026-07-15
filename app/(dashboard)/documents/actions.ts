@@ -26,7 +26,12 @@ export async function syncDropbox() {
     summary =
       `✅ ${report.created} importé(s), ${report.updated} mis à jour, ` +
       `${report.unchanged} inchangé(s)` +
-      (report.ignored.length > 0 ? `, ${report.ignored.length} ignoré(s) (format)` : "") +
+      (report.ignored.length > 0
+        ? `, ${report.ignored.length} ignoré(s) (vidéos/formats non importables)`
+        : "") +
+      (report.tooLarge.length > 0
+        ? `, ${report.tooLarge.length} trop volumineux (>50 Mo)`
+        : "") +
       (report.errors.length > 0 ? ` — ⚠️ erreurs : ${report.errors.join(" · ")}` : "");
   } catch (err) {
     summary = `❌ ${(err as Error).message}`;

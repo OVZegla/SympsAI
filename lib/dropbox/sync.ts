@@ -25,7 +25,10 @@ export interface SyncReport {
   created: number;
   updated: number;
   unchanged: number;
+  /** Vidéos et formats non importables (comportement voulu, pas une erreur). */
   ignored: string[];
+  /** Fichiers > 50 Mo, non importés automatiquement. */
+  tooLarge: string[];
   errors: string[];
 }
 
@@ -147,6 +150,7 @@ export async function syncDropboxDocuments(
     updated: 0,
     unchanged: plan.unchanged,
     ignored: plan.ignored,
+    tooLarge: plan.tooLarge,
     errors: [],
   };
 
@@ -177,6 +181,7 @@ export async function syncDropboxDocuments(
       updated: report.updated,
       unchanged: report.unchanged,
       ignored: report.ignored.length,
+      tooLarge: report.tooLarge.length,
       errors: report.errors,
     },
   });
