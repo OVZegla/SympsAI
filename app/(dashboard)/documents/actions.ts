@@ -1,12 +1,40 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, canWrite } from "@/lib/auth";
 import { extractText } from "@/lib/knowledge/extract";
 import { ingestDocumentVersion } from "@/lib/knowledge/ingestion";
+import { syncDropboxDocuments } from "@/lib/dropbox/sync";
 import { recordAudit } from "@/lib/audit";
 import type { DocumentType } from "@/lib/types/database";
+
+/**
+ * Synchronise le dossier Dropbox lié vers la bibliothèque (import cloud) :
+ * nouveaux fichiers importés, fichiers modifiés re-versionnés, le reste
+ * inchangé. Le résumé revient via l'URL pour être affiché en bannière.
+ */
+export async function syncDropbox() {
+  const profile = await requireProfile();
+  if (!canWrite(profile)) throw new Error("Insufficient permissions.");
+
+  const supabase = createClient();
+  let summary: string;
+  try {
+    const report = await syncDropboxDocuments(supabase, profile);
+    summary =
+      `✅ ${report.created} importé(s), ${report.updated} mis à jour, ` +
+      `${report.unchanged} inchangé(s)` +
+      (report.ignored.length > 0 ? `, ${report.ignored.length} ignoré(s) (format)` : "") +
+      (report.errors.length > 0 ? ` — ⚠️ erreurs : ${report.errors.join(" · ")}` : "");
+  } catch (err) {
+    summary = `❌ ${(err as Error).message}`;
+  }
+
+  revalidatePath("/documents");
+  redirect(`/documents?sync=${encodeURIComponent(summary.slice(0, 500))}`);
+}
 
 const DOCUMENT_TYPES: DocumentType[] = [
   "procedure",

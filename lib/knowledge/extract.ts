@@ -30,6 +30,10 @@ export function isTextMime(mimeType: string | null | undefined): boolean {
   );
 }
 
+export function isPdfMime(mimeType: string | null | undefined): boolean {
+  return mimeType === "application/pdf";
+}
+
 export async function extractText(
   file: Blob,
   mimeType: string | null,
@@ -37,7 +41,23 @@ export async function extractText(
   if (isTextMime(mimeType)) {
     return { text: await file.text(), extracted: true };
   }
-  // Non-text formats are not extracted in V1. The pipeline still stores the
-  // original; ingestion must be given pre-extracted text for these.
+  if (isPdfMime(mimeType)) {
+    // PDF : extraction locale via unpdf (pas de service externe). En cas de
+    // PDF scanné/sans texte on retombe sur extracted:false — l'original reste
+    // en Storage et un texte peut être fourni à la main.
+    try {
+      const { extractText: unpdfExtract, getDocumentProxy } = await import("unpdf");
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      const pdf = await getDocumentProxy(buffer);
+      const { text } = await unpdfExtract(pdf, { mergePages: true });
+      const merged = (Array.isArray(text) ? text.join("\n") : text).trim();
+      if (merged) return { text: merged, extracted: true };
+    } catch (err) {
+      console.error("[extract] PDF extraction failed:", (err as Error).message);
+    }
+    return { text: "", extracted: false };
+  }
+  // Other binary formats are not extracted in V1. The pipeline still stores
+  // the original; ingestion must be given pre-extracted text for these.
   return { text: "", extracted: false };
 }

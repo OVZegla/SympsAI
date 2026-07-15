@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
-import { uploadDocument, publishDocument } from "./actions";
+import { uploadDocument, publishDocument, syncDropbox } from "./actions";
+import { isDropboxLinked } from "@/lib/dropbox/sync";
 import type { DocumentStatus, DocumentType } from "@/lib/types/database";
 
 interface DocRow {
@@ -20,8 +21,13 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   archived: "Archivé",
 };
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({
+  searchParams,
+}: {
+  searchParams: { sync?: string };
+}) {
   const supabase = createClient();
+  const dropboxLinked = isDropboxLinked();
 
   const [{ data: docs }, { data: models }] = await Promise.all([
     supabase
@@ -37,6 +43,42 @@ export default async function DocumentsPage() {
   return (
     <div className="p-8">
       <h1 className="mb-6 text-2xl font-semibold text-slate-900">Documents</h1>
+
+      {/* Import cloud Dropbox (compte lié via `npm run dropbox:link`). */}
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-4">
+        <span className="text-xl">📦</span>
+        {dropboxLinked ? (
+          <>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-800">Dropbox lié</p>
+              <p className="text-xs text-slate-500">
+                L&apos;app fouille le dossier configuré : nouveaux fichiers importés,
+                fichiers modifiés re-versionnés (PDF, Markdown, texte).
+              </p>
+            </div>
+            <form action={syncDropbox}>
+              <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                🔄 Synchroniser depuis Dropbox
+              </button>
+            </form>
+          </>
+        ) : (
+          <div>
+            <p className="text-sm font-medium text-slate-800">Dropbox non lié</p>
+            <p className="text-xs text-slate-500">
+              Pour importer ta documentation depuis le cloud : dans le Terminal,{" "}
+              <code className="rounded bg-slate-100 px-1">npm run dropbox:link</code>{" "}
+              (une seule fois), puis redémarre l&apos;app.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {searchParams.sync && (
+        <p className="mb-6 rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          Synchronisation Dropbox : {searchParams.sync}
+        </p>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
         {/* List */}

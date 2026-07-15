@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "evals": "tsx evals/runner/index.ts",
     "embeddings:reindex": "tsx scripts/reindex-embeddings.ts",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "dropbox:link": "node scripts/dropbox-link.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -25,6 +26,7 @@
     "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "unpdf": "^1.6.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
