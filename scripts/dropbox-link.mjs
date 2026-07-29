@@ -6,18 +6,15 @@
  * l'API.
  */
 import { createInterface } from "node:readline/promises";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import path from "node:path";
-import { ROOT, log } from "./lib.mjs";
+import { log } from "./lib.mjs";
+import {
+  readEnvLocal,
+  writeEnvLocal,
+  setEnv,
+  pickFolder,
+} from "./dropbox-lib.mjs";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-function setEnv(content, key, value) {
-  const line = `${key}=${value}`;
-  const re = new RegExp(`^${key}=.*$`, "m");
-  if (re.test(content)) return content.replace(re, line);
-  return content.trimEnd() + `\n${line}\n`;
-}
 
 console.log(`
 ┌────────────────────────────────────────────────────────────────┐
@@ -76,20 +73,20 @@ if (!json.refresh_token) {
   process.exit(1);
 }
 
-const folder = (
-  await rl.question(
-    "Dossier Dropbox à fouiller (ex. /Symps/Documentations — vide = tout le Dropbox) : ",
-  )
-).trim();
+// Étape 3 — choix du dossier dans une liste (pas de chemin à taper).
+console.log("\nÉtape 3 — Choisis le dossier à synchroniser :");
+const folder = await pickFolder(rl, json.access_token);
 rl.close();
 
-const envPath = path.join(ROOT, ".env.local");
-let env = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+let env = readEnvLocal();
 env = setEnv(env, "DROPBOX_APP_KEY", appKey);
 env = setEnv(env, "DROPBOX_APP_SECRET", appSecret);
 env = setEnv(env, "DROPBOX_REFRESH_TOKEN", json.refresh_token);
 env = setEnv(env, "DROPBOX_FOLDER", folder);
-writeFileSync(envPath, env);
+writeEnvLocal(env);
 
-log("✅ Dropbox lié ! Configuration enregistrée dans .env.local (côté serveur uniquement).");
+log(
+  `✅ Dropbox lié ! Dossier synchronisé : ${folder || "(tout le Dropbox)"} — ` +
+    "configuration enregistrée dans .env.local (côté serveur uniquement).",
+);
 log("Redémarre l'app (Ctrl+C puis npm start), va sur Documents 📄 → « Synchroniser depuis Dropbox ».");

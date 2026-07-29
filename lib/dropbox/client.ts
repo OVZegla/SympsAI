@@ -146,9 +146,10 @@ export async function listDropboxFiles(config: DropboxConfig): Promise<DropboxFi
       throw new DropboxError(
         `Le dossier « ${config.folder || "/"} » n'existe pas dans ce Dropbox. ` +
           (roots.length > 0
-            ? `Dossiers visibles à la racine : ${roots.join(", ")}. `
+            ? `Dossiers disponibles : ${roots.join(", ")}. `
             : "Aucun dossier visible à la racine (app de type « App folder » ? Les chemins partent alors de son dossier dédié). ") +
-          "Corrige DROPBOX_FOLDER dans .env.local (ou relance npm run dropbox:link) puis redémarre.",
+          "Pour corriger : dans le Terminal, lance `npm run dropbox:folder` " +
+          "(il te fait choisir le dossier dans une liste), puis redémarre l'app.",
         err.detail,
       );
     }

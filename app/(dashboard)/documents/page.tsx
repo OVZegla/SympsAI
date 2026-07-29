@@ -53,7 +53,9 @@ export default async function DocumentsPage({
               <p className="text-sm font-medium text-slate-800">Dropbox lié</p>
               <p className="text-xs text-slate-500">
                 L&apos;app fouille le dossier configuré : nouveaux fichiers importés,
-                fichiers modifiés re-versionnés (PDF, Markdown, texte).
+                fichiers modifiés re-versionnés (PDF, Markdown, texte, photos ;
+                vidéos ignorées). Pour changer de dossier :{" "}
+                <code className="rounded bg-slate-100 px-1">npm run dropbox:folder</code>.
               </p>
             </div>
             <form action={syncDropbox}>

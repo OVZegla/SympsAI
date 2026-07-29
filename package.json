@@ -17,7 +17,8 @@
     "evals": "tsx evals/runner/index.ts",
     "embeddings:reindex": "tsx scripts/reindex-embeddings.ts",
     "backup": "node scripts/backup.mjs",
-    "dropbox:link": "node scripts/dropbox-link.mjs"
+    "dropbox:link": "node scripts/dropbox-link.mjs",
+    "dropbox:folder": "node scripts/dropbox-folder.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
